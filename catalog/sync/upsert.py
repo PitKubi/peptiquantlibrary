@@ -1,23 +1,23 @@
 import time
 
-from catalog.models import CatalogPeptide, SyncRun
+from catalog.models import SourcePeptideLot, SyncRun
 
 UPSERT_FIELDS = [
     'mrmp_id', 'peptide_sequence', 'label_type', 'label_tag', 'native_mutant',
-    'species', 'phospho_present', 'uniprot_id', 'gene_name', 'protein_name',
+    'species_raw', 'phospho_present', 'uniprot_id', 'gene_name', 'protein_name',
     'mass_confirmed', 'purity_confirmed', 'cze_purity', 'aaa_ratio',
-    'in_stock', 'workflow_status',
+    'workflow_status',
 ]
 
 
 def upsert_rows(rows, source_label, dry_run=False):
-    """Apply normalized row dicts to CatalogPeptide, recording a SyncRun.
+    """Apply normalized row dicts to SourcePeptideLot, recording a SyncRun.
     Returns the SyncRun (unsaved when dry_run)."""
     started = time.monotonic()
     run = SyncRun(source=source_label)
     existing = {
-        (p.source, p.source_key): p
-        for p in CatalogPeptide.objects.all()
+        (lot.source, lot.source_key): lot
+        for lot in SourcePeptideLot.objects.all()
     }
     try:
         for row in rows:
@@ -29,9 +29,10 @@ def upsert_rows(rows, source_label, dry_run=False):
             if current is None:
                 run.rows_created += 1
                 if not dry_run:
-                    CatalogPeptide.objects.create(
-                        source=row['source'], source_key=row['source_key'],
-                        **{f: row[f] for f in UPSERT_FIELDS})
+                    existing[(row['source'], row['source_key'])] = (
+                        SourcePeptideLot.objects.create(
+                            source=row['source'], source_key=row['source_key'],
+                            **{f: row[f] for f in UPSERT_FIELDS}))
                 continue
             changed = [f for f in UPSERT_FIELDS if getattr(current, f) != row[f]]
             if not changed:

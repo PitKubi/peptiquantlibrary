@@ -3,21 +3,24 @@ import tempfile
 
 from django.test import TestCase, override_settings
 
-from .models import CatalogPeptide, QuoteRequest
+from .annotation import assignment_from_matches, match_peptides
+from .models import (FastaAnnotation, PublicPeptide, QuoteRequest,
+                     SourcePeptideLot)
+from .publish import normalize_species, publish_catalog
 from .sync.sources import normalize_label_tag, rows_from_xlsx
 from .sync.upsert import upsert_rows
 
 
-def workflow_row(**overrides):
+def lot_row(**overrides):
     row = {
         'source': 'sysquan_workflow', 'source_key': 'MRMP-1',
         'mrmp_id': 'MRMP-1', 'peptide_sequence': 'LVNEVTEFAK',
         'label_type': 'SIS', 'label_tag': 'K+8', 'native_mutant': 'Native',
-        'species': 'Human', 'phospho_present': False,
-        'uniprot_id': 'P02768', 'gene_name': 'ALB', 'protein_name': 'Serum albumin',
+        'species_raw': 'Homo Sapiens', 'phospho_present': False,
+        'uniprot_id': 'P02768', 'gene_name': 'ALB', 'protein_name': '',
         'mass_confirmed': True, 'purity_confirmed': True,
         'cze_purity': 0.95, 'aaa_ratio': 1.01,
-        'in_stock': True, 'workflow_status': '9_inventory',
+        'workflow_status': '9_inventory',
     }
     row.update(overrides)
     return row
@@ -25,33 +28,141 @@ def workflow_row(**overrides):
 
 class UpsertTests(TestCase):
     def test_create_update_unchanged(self):
-        run = upsert_rows([workflow_row()], 'test')
+        run = upsert_rows([lot_row()], 'test')
         self.assertEqual((run.rows_created, run.rows_updated), (1, 0))
 
-        run = upsert_rows([workflow_row()], 'test')
+        run = upsert_rows([lot_row()], 'test')
         self.assertEqual((run.rows_created, run.rows_unchanged), (0, 1))
 
-        run = upsert_rows([workflow_row(in_stock=False)], 'test')
+        run = upsert_rows([lot_row(gene_name='ALB2')], 'test')
         self.assertEqual(run.rows_updated, 1)
-        self.assertFalse(CatalogPeptide.objects.get().in_stock)
+        self.assertEqual(SourcePeptideLot.objects.get().gene_name, 'ALB2')
 
     def test_dry_run_writes_nothing(self):
-        run = upsert_rows([workflow_row()], 'test', dry_run=True)
+        run = upsert_rows([lot_row()], 'test', dry_run=True)
         self.assertEqual(run.rows_created, 1)
-        self.assertEqual(CatalogPeptide.objects.count(), 0)
-
-    def test_blank_sequence_skipped(self):
-        run = upsert_rows([workflow_row(peptide_sequence='')], 'test')
-        self.assertEqual(run.rows_skipped, 1)
-        self.assertEqual(CatalogPeptide.objects.count(), 0)
+        self.assertEqual(SourcePeptideLot.objects.count(), 0)
 
 
-class LabelNormalizationTests(TestCase):
-    def test_nat_without_tag_becomes_dash(self):
-        self.assertEqual(normalize_label_tag('', 'NAT'), '-')
+class PublishTests(TestCase):
+    def test_one_row_per_sequence_with_availability(self):
+        upsert_rows([
+            lot_row(),
+            lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                    label_type='NAT', label_tag='-'),
+            lot_row(source_key='MRMP-2b', mrmp_id='MRMP-2b', label_tag='K+8'),
+            lot_row(source_key='MRMP-3', mrmp_id='MRMP-3',
+                    peptide_sequence='AGLQFPVGR', gene_name='H2AX',
+                    uniprot_id='P16104', label_tag='R+10'),
+        ], 'test')
+        run, rejected = publish_catalog()
+        self.assertEqual(PublicPeptide.objects.count(), 2)
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertTrue(alb.sis_available)
+        self.assertTrue(alb.nat_available)
+        self.assertEqual(alb.lot_count, 3)
+        self.assertEqual(alb.sis_label_tags, 'K+8')
+        self.assertEqual(alb.species, 'Human')
+        self.assertEqual(alb.annotation_source, 'curated')
+        h2ax = PublicPeptide.objects.get(peptide_sequence='AGLQFPVGR')
+        self.assertFalse(h2ax.nat_available)
 
-    def test_sis_without_tag_stays_empty(self):
-        self.assertEqual(normalize_label_tag('', 'SIS'), '')
+    def test_ineligible_and_nonstandard_lots_held_back(self):
+        upsert_rows([
+            lot_row(workflow_status='4_purification'),
+            lot_row(source_key='MRMP-4', mrmp_id='MRMP-4',
+                    peptide_sequence='FGRAK(+8)LLGAEE'),
+        ], 'test')
+        run, rejected = publish_catalog()
+        self.assertEqual(PublicPeptide.objects.count(), 0)
+        self.assertEqual(len(rejected), 1)
+
+    def test_fasta_fills_blanks_but_curated_wins(self):
+        upsert_rows([
+            lot_row(gene_name='', uniprot_id='', species_raw=''),
+            lot_row(source_key='MRMP-5', mrmp_id='MRMP-5',
+                    peptide_sequence='AGLQFPVGR', gene_name='CURATED',
+                    uniprot_id='P16104', label_tag='R+10'),
+        ], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            gene_name='ALB', protein_name='Serum albumin', species='Human',
+            match_count=1)
+        FastaAnnotation.objects.create(
+            peptide_sequence='AGLQFPVGR', uniprot_id='OTHER',
+            gene_name='FASTA_GENE', protein_name='Other', species='Human',
+            match_count=1)
+        publish_catalog()
+        filled = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertEqual(filled.gene_name, 'ALB')
+        self.assertEqual(filled.protein_name, 'Serum albumin')
+        self.assertEqual(filled.annotation_source, 'fasta')
+        curated = PublicPeptide.objects.get(peptide_sequence='AGLQFPVGR')
+        self.assertEqual(curated.gene_name, 'CURATED')
+        self.assertEqual(curated.uniprot_id, 'P16104')
+
+    def test_species_normalization(self):
+        self.assertEqual(normalize_species('homo Sapiens'), 'Human')
+        self.assertEqual(normalize_species('Macaca fascicularis'), 'Macaque')
+        self.assertEqual(normalize_species(''), '')
+        self.assertEqual(normalize_species('rattus norvegicus'),
+                         'Rattus norvegicus')
+
+
+FASTA = """>sp|P02768|ALBU_HUMAN Serum albumin OS=Homo sapiens (Human) OX=9606 GN=ALB PE=1 SV=2
+MKWVTFISLLFLFSSAYSLVNEVTEFAKTCVADESAENCDK
+>sp|P16104|H2AX_HUMAN Histone H2AX OS=Homo sapiens (Human) OX=9606 GN=H2AX PE=1 SV=2
+AGLQFPVGRVHRLLRKGNY
+>sp|Q00001|FAKE1_HUMAN Shared protein one OS=Homo sapiens (Human) OX=9606 GN=SHRD PE=1 SV=1
+AAASHAREDPEPK
+>sp|Q00002|FAKE2_HUMAN Shared protein two OS=Homo sapiens (Human) OX=9606 GN=SHRD PE=1 SV=1
+GGGSHAREDPEPK
+>sp|Q00003|FAKE3_HUMAN Ambiguous protein OS=Homo sapiens (Human) OX=9606 GN=AMBI PE=1 SV=1
+CCCSHAREDPEPK
+"""
+
+
+class AnnotationTests(TestCase):
+    def _fasta_path(self):
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        return f.name
+
+    def test_unique_match_annotates_fully(self):
+        matches = match_peptides({'LVNEVTEFAK'}, [self._fasta_path()])
+        assignment = assignment_from_matches(matches['LVNEVTEFAK'])
+        self.assertEqual(assignment['uniprot_id'], 'P02768')
+        self.assertEqual(assignment['gene_name'], 'ALB')
+        self.assertEqual(assignment['protein_name'], 'Serum albumin')
+        self.assertEqual(assignment['species'], 'Human')
+        self.assertEqual(assignment['match_count'], 1)
+
+    def test_shared_peptide_same_gene_keeps_gene_not_accession(self):
+        matches = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
+        entries = matches['SHAREDPEPK']
+        self.assertEqual(len(entries), 3)
+        same_gene = [e for e in entries if e[1] == 'SHRD']
+        assignment = assignment_from_matches(same_gene)
+        self.assertEqual(assignment['gene_name'], 'SHRD')
+        self.assertEqual(assignment['uniprot_id'], '')
+        assignment = assignment_from_matches(entries)
+        self.assertEqual(assignment['gene_name'], '')
+        self.assertEqual(assignment['match_count'], 3)
+
+    def test_unmatched_scores_zero(self):
+        matches = match_peptides({'WWWWWWWWWW'}, [self._fasta_path()])
+        assignment = assignment_from_matches(matches.get('WWWWWWWWWW', []))
+        self.assertEqual(assignment['match_count'], 0)
+
+    def test_command_end_to_end(self):
+        upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='')],
+                    'test')
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', self._fasta_path())
+        public = PublicPeptide.objects.get()
+        self.assertEqual(public.gene_name, 'ALB')
+        self.assertEqual(public.annotation_source, 'fasta')
 
 
 class XlsxSourceTests(TestCase):
@@ -66,72 +177,95 @@ class XlsxSourceTests(TestCase):
         workbook.save(f.name)
         return f.name
 
-    def test_header_aliases_and_rows(self):
+    def test_nat_available_emits_second_lot(self):
         path = self._xlsx(
-            ['Peptide Sequence', 'Gene', 'UniProt', 'Label', 'Species'],
-            [['LVNEVTEFAK', 'ALB', 'P02768', 'K+8', 'Human'],
-             ['', '', '', '', ''],
-             ['AGLQFPVGR', 'H2AX', 'P16104', 'R+10', 'Human']])
+            ['Peptide Sequence', 'Gene', 'UniProt', 'Label', 'NAT available'],
+            [['LVNEVTEFAK', 'ALB', 'P02768', 'K+8', 'yes'],
+             ['AGLQFPVGR', 'H2AX', 'P16104', 'R+10', '']])
         rows = list(rows_from_xlsx(path))
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[0]['gene_name'], 'ALB')
-        self.assertEqual(rows[0]['label_type'], 'SIS')
-        self.assertEqual(rows[1]['label_tag'], 'R+10')
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[1]['label_type'], 'NAT')
+        self.assertEqual(rows[1]['peptide_sequence'], 'LVNEVTEFAK')
 
     def test_missing_sequence_column_raises(self):
         path = self._xlsx(['Gene', 'UniProt'], [['ALB', 'P02768']])
         with self.assertRaises(ValueError):
             list(rows_from_xlsx(path))
 
+    def test_nat_label_defaults_to_dash(self):
+        self.assertEqual(normalize_label_tag('', 'NAT'), '-')
+        self.assertEqual(normalize_label_tag('', 'SIS'), '')
+
 
 class PublicViewTests(TestCase):
     def setUp(self):
         upsert_rows([
-            workflow_row(),
-            workflow_row(source_key='MRMP-2', mrmp_id='MRMP-2',
-                         label_type='NAT', label_tag='-', in_stock=False),
-            workflow_row(source_key='MRMP-3', mrmp_id='MRMP-3',
-                         peptide_sequence='AGLQFPVGR', gene_name='H2AX',
-                         uniprot_id='P16104', protein_name='Histone H2AX'),
+            lot_row(),
+            lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                    label_type='NAT', label_tag='-'),
+            lot_row(source_key='MRMP-3', mrmp_id='MRMP-3',
+                    peptide_sequence='AGLQFPVGR', gene_name='H2AX',
+                    uniprot_id='P16104', label_tag='R+10'),
         ], 'test')
+        publish_catalog()
 
-    def test_search_by_gene_and_filters(self):
+    def test_landing_shows_catalog_and_stats(self):
+        response = self.client.get('/')
+        self.assertContains(response, 'LVNEVTEFAK')
+        self.assertContains(response, 'AGLQFPVGR')
+
+    def test_search_and_availability_filter(self):
         response = self.client.get('/', {'q': 'ALB'})
         self.assertContains(response, 'LVNEVTEFAK')
         self.assertNotContains(response, 'AGLQFPVGR')
 
-        response = self.client.get('/', {'q': 'ALB', 'label_type': 'SIS'})
-        self.assertContains(response, 'in stock')
+        response = self.client.get('/', {'availability': 'nat'})
+        self.assertContains(response, 'LVNEVTEFAK')
+        self.assertNotContains(response, 'AGLQFPVGR')
 
-        response = self.client.get('/', {'q': 'ALB', 'in_stock': '1'})
-        self.assertEqual(
-            len(response.context['page'].object_list), 1)
+    def test_bulk_paste_matches_and_reports_unmatched(self):
+        response = self.client.get('/', {'bulk': 'ALB\nP16104, NOSUCHGENE'})
+        self.assertContains(response, 'LVNEVTEFAK')
+        self.assertContains(response, 'AGLQFPVGR')
+        self.assertContains(response, 'NOSUCHGENE')
 
-    def test_detail_links_counterpart(self):
-        sis = CatalogPeptide.objects.get(mrmp_id='MRMP-1')
-        response = self.client.get(f'/peptide/{sis.id}/')
-        self.assertContains(response, 'Same sequence, other label')
+    def test_selection_and_quote_flow(self):
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        response = self.client.post('/selection/', {
+            'action': 'add', 'peptide': [alb.id], 'next': '/'})
+        self.assertRedirects(response, '/')
 
-    def test_quote_request_flow(self):
-        peptide = CatalogPeptide.objects.get(mrmp_id='MRMP-1')
-        response = self.client.post('/request/', {'peptide': [peptide.id]})
+        response = self.client.get('/request/')
         self.assertContains(response, 'LVNEVTEFAK')
 
         response = self.client.post('/request/', {
-            'submit_request': '1', 'peptide': [peptide.id],
+            'submit_request': '1',
+            f'sis_{alb.id}': 'on', f'nat_{alb.id}': 'on',
             'name': 'Jane Doe', 'email': 'jane@example.org',
             'organization': 'Example Lab', 'message': '2 nmol each'})
         self.assertRedirects(response, '/request/done/')
         quote = QuoteRequest.objects.get()
-        self.assertEqual(quote.items.count(), 1)
-        self.assertEqual(quote.items.get().peptide_sequence, 'LVNEVTEFAK')
+        item = quote.items.get()
+        self.assertTrue(item.want_sis)
+        self.assertTrue(item.want_nat)
+        self.assertEqual(self.client.session['selection'], [])
 
-    def test_quote_request_requires_contact(self):
-        peptide = CatalogPeptide.objects.get(mrmp_id='MRMP-1')
+    def test_quote_requires_contact_and_a_form(self):
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],
+                                         'next': '/'})
         response = self.client.post('/request/', {
-            'submit_request': '1', 'peptide': [peptide.id], 'name': '', 'email': ''})
+            'submit_request': '1', 'name': 'Jane', 'email': 'jane@example.org'})
         self.assertContains(response, 'required')
         self.assertEqual(QuoteRequest.objects.count(), 0)
+
+    def test_selection_remove(self):
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],
+                                         'next': '/'})
+        self.client.post('/selection/', {'action': 'remove', 'peptide': alb.id,
+                                         'next': '/request/'})
+        self.assertEqual(self.client.session['selection'], [])
 
 
 @override_settings(PQL_ADMIN_TOKEN='sekret')
@@ -141,22 +275,28 @@ class AdminApiTests(TestCase):
         response = self.client.get('/api/admin/health/',
                                    headers={'X-Admin-Token': 'sekret'})
         self.assertEqual(response.status_code, 200)
-        self.assertIn('git_head', response.json())
+        body = response.json()
+        self.assertIn('git_head', body)
+        self.assertIn('curation_gaps', body)
 
     @override_settings(PQL_ADMIN_TOKEN='')
     def test_unconfigured_token_refuses(self):
         self.assertEqual(self.client.get('/api/admin/health/').status_code, 503)
 
     def test_quote_requests_listing_and_handling(self):
-        upsert_rows([workflow_row()], 'test')
-        peptide = CatalogPeptide.objects.get()
+        upsert_rows([lot_row()], 'test')
+        publish_catalog()
+        peptide = PublicPeptide.objects.get()
+        self.client.post('/selection/', {'action': 'add',
+                                         'peptide': [peptide.id], 'next': '/'})
         self.client.post('/request/', {
-            'submit_request': '1', 'peptide': [peptide.id],
+            'submit_request': '1', f'sis_{peptide.id}': 'on',
             'name': 'Jane', 'email': 'jane@example.org'})
         response = self.client.get('/api/admin/quote-requests/',
                                    headers={'X-Admin-Token': 'sekret'})
         listed = response.json()['quote_requests']
         self.assertEqual(len(listed), 1)
+        self.assertIn('[SIS]', listed[0]['items'][0])
 
         response = self.client.post(
             '/api/admin/quote-requests/mark-handled/',
@@ -167,16 +307,21 @@ class AdminApiTests(TestCase):
 
 
 class ExportImportTests(TestCase):
-    def test_round_trip(self):
-        upsert_rows([workflow_row(),
-                     workflow_row(source_key='MRMP-2', mrmp_id='MRMP-2',
-                                  label_type='NAT', label_tag='-')], 'test')
+    def test_round_trip_republishes(self):
+        upsert_rows([lot_row(),
+                     lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                             label_type='NAT', label_tag='-')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            gene_name='ALB', match_count=1)
         from django.core.management import call_command
         with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
             call_command('export_catalog', f.name)
-            CatalogPeptide.objects.all().delete()
+            SourcePeptideLot.objects.all().delete()
+            FastaAnnotation.objects.all().delete()
+            PublicPeptide.objects.all().delete()
             call_command('import_catalog', f.name)
-        self.assertEqual(CatalogPeptide.objects.count(), 2)
-        restored = CatalogPeptide.objects.get(mrmp_id='MRMP-1')
-        self.assertTrue(restored.in_stock)
-        self.assertEqual(restored.cze_purity, 0.95)
+        self.assertEqual(SourcePeptideLot.objects.count(), 2)
+        self.assertEqual(FastaAnnotation.objects.count(), 1)
+        public = PublicPeptide.objects.get()
+        self.assertTrue(public.sis_available and public.nat_available)

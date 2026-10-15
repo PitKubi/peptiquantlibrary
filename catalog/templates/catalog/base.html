@@ -1,79 +1,118 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}PeptiQuant Library{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
+/* Palette matched to peptiquantonco.com (Inter, navy #003366/#1e3a8a, blue accents). */
 :root {
-  --ink: #1a1a1a;
-  --accent: #0b5e8a;
-  --accent-dark: #084563;
-  --line: #d8d8d8;
-  --bg-soft: #f4f7f9;
-  --ok: #1b7a3d;
+  --ink: #212529;
+  --navy: #003366;
+  --navy-2: #1e3a8a;
+  --blue: #3b82f6;
+  --line: #dee2e6;
+  --bg-soft: #f8f9fa;
+  --ok: #28a745;
 }
 * { box-sizing: border-box; }
-body {
-  margin: 0; color: var(--ink); background: #fff;
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-header { background: var(--accent-dark); padding: 0 16px; }
-header .inner {
-  max-width: 1100px; margin: 0 auto; display: flex; align-items: baseline;
-  gap: 24px; padding: 14px 0; flex-wrap: wrap;
-}
-header a { color: #fff; text-decoration: none; }
-header .brand { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
-header nav a { margin-right: 18px; font-size: 15px; }
-main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
-h1 { font-size: 26px; margin: 8px 0 16px; }
-a { color: var(--accent); }
+body { margin: 0; color: var(--ink); background: #fff;
+       font: 15px/1.5 Inter, system-ui, sans-serif; }
+header { background: #fff; border-bottom: 1px solid var(--line); }
+header .inner { max-width: 1150px; margin: 0 auto; padding: 10px 16px;
+                display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+header img.logo { height: 38px; display: block; }
+header nav { display: flex; gap: 20px; align-items: center; flex: 1; }
+header nav a { color: var(--navy); text-decoration: none; font-weight: 600; font-size: 14px; }
+header nav a.ext::after { content: " \2197"; }
+a.cart { margin-left: auto; background: var(--navy-2); color: #fff; text-decoration: none;
+         padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 14px; }
+.hero { background: linear-gradient(120deg, var(--navy), var(--navy-2)); color: #fff; }
+.hero .inner { max-width: 1150px; margin: 0 auto; padding: 26px 16px; }
+.hero h1 { margin: 0 0 4px; font-size: 26px; }
+.hero .stats { display: flex; gap: 34px; margin-top: 14px; flex-wrap: wrap; }
+.hero .stats b { display: block; font-size: 24px; }
+.hero .stats span { font-size: 13px; color: #fff; }
+main { max-width: 1150px; margin: 0 auto; padding: 20px 16px 64px; }
+h2 { font-size: 19px; }
+a { color: var(--navy-2); }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
-th { background: var(--bg-soft); font-weight: 600; }
+th { background: var(--bg-soft); font-weight: 600; white-space: nowrap; }
 tr:hover td { background: var(--bg-soft); }
-.seq { font-family: ui-monospace, Menlo, Consolas, monospace; }
-.pill {
-  display: inline-block; padding: 1px 9px; border-radius: 10px;
-  font-size: 12px; font-weight: 600; border: 1px solid var(--line);
-}
-.pill.sis { background: #e8f1f7; color: var(--accent-dark); border-color: #b9d4e4; }
-.pill.nat { background: #f1f1f1; color: var(--ink); }
-.pill.stock { background: #e7f3ec; color: var(--ok); border-color: #bfdfcc; }
-.controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; align-items: center; }
+.seq { font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+.pill { display: inline-block; padding: 1px 10px; border-radius: 10px;
+        font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill.avail { background: #e7f3ec; color: #155724; border: 1px solid #bfdfcc; }
+.pill.req { background: var(--bg-soft); color: var(--ink); border: 1px solid var(--line); }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; align-items: center; }
 input[type=text], input[type=email], select, textarea {
   padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
-  font: inherit; color: var(--ink);
-}
+  font: inherit; color: var(--ink); }
 input[type=text].grow { flex: 1; min-width: 260px; }
-button, .btn {
-  padding: 8px 18px; border: 0; border-radius: 6px; background: var(--accent);
-  color: #fff; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
-}
-button:hover, .btn:hover { background: var(--accent-dark); }
-label.check { display: inline-flex; gap: 6px; align-items: center; }
+button, .btn { padding: 8px 18px; border: 0; border-radius: 6px; background: var(--navy-2);
+  color: #fff; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+button:hover, .btn:hover { background: var(--navy); }
+button.small { padding: 4px 12px; font-size: 13px; }
 .note { font-size: 14px; }
 .error { color: #a4231c; font-weight: 600; }
-.pager { margin-top: 16px; display: flex; gap: 14px; }
-footer { border-top: 1px solid var(--line); margin-top: 40px; }
-footer .inner { max-width: 1100px; margin: 0 auto; padding: 18px 16px; font-size: 14px; }
-@media (max-width: 700px) {
-  th:nth-child(6), td:nth-child(6), th:nth-child(7), td:nth-child(7) { display: none; }
+.pager { margin-top: 16px; display: flex; gap: 14px; align-items: center; }
+details.bulk { margin: 0 0 16px; }
+details.bulk summary { cursor: pointer; font-weight: 600; color: var(--navy-2); }
+.onco-banner { border: 1px solid var(--line); border-left: 4px solid var(--navy-2);
+  background: var(--bg-soft); border-radius: 6px; padding: 12px 16px; margin: 22px 0; font-size: 14px; }
+/* Click-to-copy cells (Peter: gene/protein/peptide must be copyable). */
+.copy { cursor: copy; position: relative; }
+.copy:hover { text-decoration: underline dotted; }
+.copy.copied::after { content: "copied"; position: absolute; top: -20px; left: 0;
+  background: var(--ink); color: #fff; font-size: 11px; padding: 1px 7px;
+  border-radius: 4px; font-family: Inter, sans-serif; }
+footer { border-top: 1px solid var(--line); margin-top: 40px; background: var(--bg-soft); }
+footer .inner { max-width: 1150px; margin: 0 auto; padding: 18px 16px; font-size: 13px;
+  display: flex; gap: 24px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  th.opt, td.opt { display: none; }
+  header img.logo { height: 30px; }
 }
 </style>
 </head>
 <body>
 <header><div class="inner">
-  <a class="brand" href="/">PeptiQuant Library</a>
+  <a href="/"><img class="logo" src="{% static 'catalog/PeptiQuant_logo.png' %}"
+     alt="PeptiQuant Library"></a>
   <nav>
-    <a href="/">Search</a>
+    <a href="/">Library</a>
     <a href="/about/">About</a>
+    <a class="ext" href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>
+    <a class="cart" href="/request/">Your list{% if selection_count %} ({{ selection_count }}){% endif %}</a>
   </nav>
 </div></header>
+{% block hero %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
 <footer><div class="inner">
-  PeptiQuant Library · synthetic proteotypic peptides, curated by MRM Proteomics.
+  <span>PeptiQuant Library &middot; synthetic proteotypic peptides by MRM Proteomics</span>
+  <a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>
+  <a href="https://www.mrmproteomics.com" rel="noopener">mrmproteomics.com</a>
 </div></footer>
+<script>
+document.addEventListener('click', function (event) {
+  var el = event.target.closest('.copy');
+  if (!el) return;
+  var text = el.dataset.copy || el.textContent.trim();
+  function done() {
+    el.classList.add('copied');
+    setTimeout(function () { el.classList.remove('copied'); }, 900);
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done);
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta); done();
+  }
+});
+</script>
 </body>
 </html>

@@ -7,3 +7,5 @@ logs/
 .deploy.env
 .env
 media/
+fasta/
+

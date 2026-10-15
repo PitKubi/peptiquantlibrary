@@ -1,14 +1,15 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from catalog.publish import publish_catalog
 from catalog.sync.sources import rows_from_sysquan_db, rows_from_xlsx
 from catalog.sync.upsert import upsert_rows
 
 
 class Command(BaseCommand):
-    help = ('Refresh the public catalog from a source: --from-db reads the '
-            'SysQuan Postgres via the read-only SYSQUAN_DB_DSN role, '
-            '--from-xlsx reads a catalog spreadsheet.')
+    help = ('Refresh the lot table from a source (--from-db reads the SysQuan '
+            'Postgres via the read-only SYSQUAN_DB_DSN role, --from-xlsx reads '
+            'a catalog spreadsheet), then republish the public catalog.')
 
     def add_arguments(self, parser):
         parser.add_argument('--from-db', action='store_true')
@@ -16,6 +17,8 @@ class Command(BaseCommand):
         parser.add_argument('--default-label-type', default='SIS',
                             help='Label type assumed for spreadsheet rows without one')
         parser.add_argument('--dry-run', action='store_true')
+        parser.add_argument('--no-publish', action='store_true',
+                            help='Sync lots only; skip rebuilding the public table')
 
     def handle(self, *args, **options):
         if options['from_db']:
@@ -39,3 +42,8 @@ class Command(BaseCommand):
             f'skipped={run.rows_skipped} in {run.duration_seconds}s')
         if run.error:
             raise CommandError(run.error)
+        if not options['dry_run'] and not options['no_publish']:
+            publish_run, rejected = publish_catalog()
+            self.stdout.write(
+                f'published {publish_run.rows_created} public peptides '
+                f'({publish_run.rows_skipped} non-standard sequences held back)')

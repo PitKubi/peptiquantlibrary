@@ -17,7 +17,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-API_BUILD = '2026-10-15-scaffold-1'
+API_BUILD = '2026-10-15-public-catalog-2'
 
 
 def _token_from(request):
@@ -122,8 +122,10 @@ def quote_requests(request):
             'name': quote.name, 'email': quote.email,
             'organization': quote.organization, 'status': quote.status,
             'message': quote.message,
-            'items': [f'{i.peptide_sequence} [{i.label_type} {i.label_tag}]'
-                      for i in quote.items.all()],
+            'items': [
+                f'{i.peptide_sequence} '
+                f'[{"+".join(f for f, on in [("SIS", i.want_sis), ("NAT", i.want_nat)] if on)}]'
+                for i in quote.items.all()],
         })
     return JsonResponse({'quote_requests': recent})
 

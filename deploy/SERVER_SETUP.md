@@ -57,16 +57,28 @@ DEFAULT_FROM_EMAIL=peptiquantonco@mrmproteomics.com
 PQL_LOG_DIR=/home/peter/peptiquantlibrary/logs
 ```
 
-First migrate + sync by hand to prove the DSN works:
+First migrate + sync by hand to prove the DSN works, then annotate against the
+reference proteomes (fills gene/protein/species where Maria's curation is
+blank; curated values always win):
 
 ```bash
 cd /home/peter/peptiquantlibrary
 set -a; source /etc/peptiquantlibrary/env; set +a
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py sync_catalog --from-db
+mkdir -p fasta
+curl -o fasta/uniprot_human_reviewed.fasta \
+  'https://rest.uniprot.org/uniprotkb/stream?format=fasta&query=reviewed:true+AND+organism_id:9606'
+curl -o fasta/uniprot_mouse_reviewed.fasta \
+  'https://rest.uniprot.org/uniprotkb/stream?format=fasta&query=reviewed:true+AND+organism_id:10090'
+.venv/bin/python manage.py annotate_from_fasta fasta/uniprot_human_reviewed.fasta fasta/uniprot_mouse_reviewed.fasta
 .venv/bin/python manage.py catalog_stats
+.venv/bin/python manage.py curation_report /tmp/curation_report.xlsx   # for Maria
 .venv/bin/python manage.py collectstatic --noinput
 ```
+
+(`fasta/` is gitignored. Re-run annotate_from_fasta on fresh FASTAs when
+UniProt releases update, typically a few times a year.)
 
 ## 5. systemd + sudoers
 

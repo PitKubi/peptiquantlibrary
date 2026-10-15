@@ -1,17 +1,26 @@
 {% extends 'catalog/base.html' %}
+{% block hero %}
+<div class="hero"><div class="inner">
+  <h1>PeptiQuant Library</h1>
+  <div class="note">Synthetic proteotypic peptides for targeted quantitative
+  proteomics &mdash; labeled standards (SIS) and unlabeled counterparts (NAT),
+  synthesized and quality-controlled in house.</div>
+  <div class="stats">
+    <div><b>{{ total }}</b><span>peptides</span></div>
+    <div><b>{{ proteins }}</b><span>proteins</span></div>
+    <div><b>{{ species_count }}</b><span>species</span></div>
+  </div>
+</div></div>
+{% endblock %}
 {% block content %}
-<h1>Find synthetic peptides</h1>
-<p class="note">{{ total }} peptides, labeled (SIS) and unlabeled (NAT), each
-synthesized and quality-controlled in house. Search by gene, UniProt accession,
-protein name or peptide sequence, then request a quote.</p>
 
 <form method="get" class="controls">
   <input class="grow" type="text" name="q" value="{{ query }}"
-         placeholder="e.g. ALB, P02768, serum albumin, or LVNEVTEFAK">
-  <select name="label_type">
+         placeholder="Search gene, UniProt accession, protein name or peptide sequence">
+  <select name="availability">
     <option value="">SIS + NAT</option>
-    <option value="SIS" {% if label_type == 'SIS' %}selected{% endif %}>SIS only</option>
-    <option value="NAT" {% if label_type == 'NAT' %}selected{% endif %}>NAT only</option>
+    <option value="sis" {% if availability == 'sis' %}selected{% endif %}>SIS available</option>
+    <option value="nat" {% if availability == 'nat' %}selected{% endif %}>NAT available</option>
   </select>
   {% if species_options %}
   <select name="species">
@@ -21,43 +30,60 @@ protein name or peptide sequence, then request a quote.</p>
     {% endfor %}
   </select>
   {% endif %}
-  <label class="check"><input type="checkbox" name="in_stock" value="1"
-         {% if stock_only %}checked{% endif %}> in stock</label>
   <button type="submit">Search</button>
+  {% if filtered %}<a href="/">reset</a>{% endif %}
 </form>
 
-{% if searched %}
-<form method="post" action="/request/">
-<p class="note">{{ page.paginator.count }} result{{ page.paginator.count|pluralize }}.
-Tick peptides and <button type="submit">Request a quote</button></p>
+<details class="bulk" {% if bulk %}open{% endif %}>
+  <summary>Paste a target list</summary>
+  <form method="get" style="margin-top:10px; display:grid; gap:8px; max-width:560px">
+    <textarea name="bulk" rows="5"
+      placeholder="One gene, UniProt accession or peptide sequence per line (or comma-separated)">{{ bulk }}</textarea>
+    <div><button type="submit">Find all matching peptides</button></div>
+  </form>
+  {% if unmatched_tokens %}
+  <p class="note error">Not found: {{ unmatched_tokens|join:', ' }}</p>
+  {% endif %}
+</details>
+
+<form method="post" action="/selection/">
+{% csrf_token %}
+<input type="hidden" name="action" value="add">
+<input type="hidden" name="next" value="{{ request.get_full_path }}">
+<p class="note">{{ page.paginator.count }} peptide{{ page.paginator.count|pluralize }}
+&mdash; tick rows, <button class="small" type="submit">Add to your list</button>
+&mdash; click any value to copy it.</p>
 <table>
-<tr><th></th><th>Peptide</th><th>Label</th><th>Gene</th><th>UniProt</th>
-    <th>Protein</th><th>Species</th><th>QC</th><th>Availability</th></tr>
+<tr><th></th><th>Peptide</th><th>Gene</th><th class="opt">Protein</th>
+    <th>UniProt</th><th class="opt">Species</th><th>SIS</th><th>NAT</th></tr>
 {% for p in page %}
 <tr>
   <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
-  <td class="seq"><a href="/peptide/{{ p.id }}/">{{ p.peptide_sequence }}</a></td>
-  <td><span class="pill {{ p.label_type|lower }}">{{ p.label_type }}</span>
-      {% if p.label_tag and p.label_tag != '-' %}{{ p.label_tag }}{% endif %}</td>
-  <td>{{ p.gene_name }}</td>
-  <td>{% if p.uniprot_id %}<a href="https://www.uniprot.org/uniprotkb/{{ p.uniprot_id }}"
-       rel="noopener">{{ p.uniprot_id }}</a>{% endif %}</td>
-  <td>{{ p.protein_name }}</td>
-  <td>{{ p.species }}</td>
-  <td>{% if p.mass_confirmed %}mass{% endif %}{% if p.mass_confirmed and p.purity_confirmed %} + {% endif %}{% if p.purity_confirmed %}purity{% endif %}</td>
-  <td>{% if p.in_stock %}<span class="pill stock">in stock</span>{% else %}on request{% endif %}</td>
+  <td><span class="seq copy">{{ p.peptide_sequence }}</span>
+      <a href="/peptide/{{ p.id }}/" title="Details">&#8505;</a></td>
+  <td><span class="copy">{{ p.gene_name }}</span></td>
+  <td class="opt"><span class="copy">{{ p.protein_name }}</span></td>
+  <td>{% if p.uniprot_id %}<span class="copy">{{ p.uniprot_id }}</span>
+      <a href="https://www.uniprot.org/uniprotkb/{{ p.uniprot_id }}" rel="noopener"
+         title="UniProt">&#8599;</a>{% endif %}</td>
+  <td class="opt">{{ p.species }}</td>
+  <td>{% if p.sis_available %}<span class="pill avail">available{% if p.sis_label_tags %} {{ p.sis_label_tags }}{% endif %}</span>
+      {% else %}<span class="pill req">on request</span>{% endif %}</td>
+  <td>{% if p.nat_available %}<span class="pill avail">available</span>
+      {% else %}<span class="pill req">on request</span>{% endif %}</td>
 </tr>
 {% empty %}
-<tr><td colspan="9">No peptides match. Try a shorter query, or request a custom
-synthesis via the <a href="/about/">contact details</a>.</td></tr>
+<tr><td colspan="8">No peptides match. Any peptide can be synthesized on
+request &mdash; <a href="/request/">send us the targets</a>.</td></tr>
 {% endfor %}
 </table>
 <div class="pager">
-  {% if page.has_previous %}<a href="?q={{ query }}&label_type={{ label_type }}&species={{ species }}{% if stock_only %}&in_stock=1{% endif %}&page={{ page.previous_page_number }}">&larr; previous</a>{% endif %}
+  {% if page.has_previous %}<a href="?{% querystring page=page.previous_page_number %}">&larr; previous</a>{% endif %}
   {% if page.paginator.num_pages > 1 %}<span>page {{ page.number }} / {{ page.paginator.num_pages }}</span>{% endif %}
-  {% if page.has_next %}<a href="?q={{ query }}&label_type={{ label_type }}&species={{ species }}{% if stock_only %}&in_stock=1{% endif %}&page={{ page.next_page_number }}">next &rarr;</a>{% endif %}
+  {% if page.has_next %}<a href="?{% querystring page=page.next_page_number %}">next &rarr;</a>{% endif %}
 </div>
-{% csrf_token %}
 </form>
-{% endif %}
+
+<div class="onco-banner">Looking for ready-made cancer-mutation assay kits?
+Build one at <a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>.</div>
 {% endblock %}

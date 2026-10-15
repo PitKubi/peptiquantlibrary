@@ -1,5 +1,5 @@
 """Readers that turn each catalog source into normalized row dicts matching
-CatalogPeptide field names. Keeping the SQL here (plain psycopg2, no Django
+SourcePeptideLot field names. Keeping the SQL here (plain psycopg2, no Django
 models for the foreign schema) is what keeps this project fully standalone
 from the sysquant codebase: moving servers means changing one DSN."""
 
@@ -22,8 +22,7 @@ WORKFLOW_SQL = """
     SELECT mrmp_id, peptide_sequence, label_type, label, native_mutant,
            species, phospho_present, uniprot_id, gene_name,
            mass_confirmed_post_synth, mass_confirmed_post_hplc,
-           purity_confirmed, cze_purity, aaa_ratio,
-           workflow_status, stock_position
+           purity_confirmed, cze_purity, aaa_ratio, workflow_status
     FROM sysq_inhouse_peptideworkflowentry
     WHERE workflow_status != 'failed'
 """
@@ -34,7 +33,7 @@ INVENTORY_SQL = """
     SELECT mrmp_id, peptide_sequence, label_type, phospho_present,
            uniprot_id, gene_name,
            post_synthesis_confirmed, post_hplc_confirmed,
-           cze_purity, aaa_ratio, storage_location
+           cze_purity, aaa_ratio
     FROM sysq_inhouse_syntheticpeptideinventory
     WHERE source = 'csv_upload'
       AND mrmp_id NOT IN (SELECT mrmp_id FROM sysq_inhouse_peptideworkflowentry)
@@ -57,7 +56,7 @@ def rows_from_sysquan_db(dsn):
                     'label_type': normalize_label_type(r['label_type']),
                     'label_tag': normalize_label_tag(r['label'], r['label_type']),
                     'native_mutant': (r['native_mutant'] or '').strip(),
-                    'species': (r['species'] or '').strip(),
+                    'species_raw': (r['species'] or '').strip(),
                     'phospho_present': bool(r['phospho_present']),
                     'uniprot_id': (r['uniprot_id'] or '').strip(),
                     'gene_name': (r['gene_name'] or '').strip(),
@@ -67,8 +66,6 @@ def rows_from_sysquan_db(dsn):
                     'purity_confirmed': bool(r['purity_confirmed']),
                     'cze_purity': r['cze_purity'],
                     'aaa_ratio': r['aaa_ratio'],
-                    'in_stock': (r['workflow_status'] == '9_inventory'
-                                 and bool((r['stock_position'] or '').strip())),
                     'workflow_status': r['workflow_status'] or '',
                 }
             cursor.execute(INVENTORY_SQL)
@@ -81,7 +78,7 @@ def rows_from_sysquan_db(dsn):
                     'label_type': normalize_label_type(r['label_type']),
                     'label_tag': normalize_label_tag('', r['label_type']),
                     'native_mutant': '',
-                    'species': '',
+                    'species_raw': '',
                     'phospho_present': bool(r['phospho_present']),
                     'uniprot_id': (r['uniprot_id'] or '').strip(),
                     'gene_name': (r['gene_name'] or '').strip(),
@@ -91,14 +88,16 @@ def rows_from_sysquan_db(dsn):
                     'purity_confirmed': r['cze_purity'] is not None,
                     'cze_purity': r['cze_purity'],
                     'aaa_ratio': r['aaa_ratio'],
-                    'in_stock': bool((r['storage_location'] or '').strip()),
-                    'workflow_status': '',
+                    # Legacy inventory rows ARE the curated inventory; they
+                    # carry no workflow status, so eligibility is granted here.
+                    'workflow_status': '9_inventory',
                 }
 
 
 # Spreadsheet import for catalogs that exist outside the SysQuan database,
-# such as the 2026-05 SIS catalog with the BAK270 kit peptides. Header names
-# are matched case-insensitively after stripping; only sequence is mandatory.
+# such as the 2026-05 SIS catalog with the BAK270 kit peptides. That format is
+# one SIS row per peptide plus a "NAT available" yes/blank column, so a yes
+# also emits a NAT lot. Header names are matched case-insensitively.
 XLSX_COLUMN_ALIASES = {
     'peptide_sequence': ('peptide sequence', 'sequence', 'peptide'),
     'label_type': ('label type', 'sis/nat', 'type'),
@@ -109,7 +108,7 @@ XLSX_COLUMN_ALIASES = {
     'protein_name': ('protein', 'protein name'),
     'species': ('species', 'organism'),
     'mrmp_id': ('mrmp id', 'mrmp_id', 'peptide id'),
-    'in_stock': ('in stock', 'available', 'nat available'),
+    'nat_available': ('nat available', 'nat'),
 }
 
 
@@ -148,15 +147,12 @@ def rows_from_xlsx(path, default_label_type='SIS'):
             continue
         label_type = normalize_label_type(cell(row, 'label_type') or default_label_type)
         label_tag = normalize_label_tag(cell(row, 'label_tag'), label_type)
-        yield {
+        base = {
             'source': 'catalog_xlsx',
-            'source_key': f'{sequence}|{label_type}|{label_tag}',
             'mrmp_id': cell(row, 'mrmp_id'),
             'peptide_sequence': sequence,
-            'label_type': label_type,
-            'label_tag': label_tag,
             'native_mutant': '',
-            'species': cell(row, 'species'),
+            'species_raw': cell(row, 'species'),
             'phospho_present': False,
             'uniprot_id': cell(row, 'uniprot_id'),
             'gene_name': cell(row, 'gene_name'),
@@ -165,6 +161,11 @@ def rows_from_xlsx(path, default_label_type='SIS'):
             'purity_confirmed': False,
             'cze_purity': None,
             'aaa_ratio': None,
-            'in_stock': cell(row, 'in_stock').lower() in ('yes', 'y', 'true', '1'),
             'workflow_status': '',
         }
+        yield {**base, 'source_key': f'{sequence}|{label_type}|{label_tag}',
+               'label_type': label_type, 'label_tag': label_tag}
+        if (label_type == 'SIS'
+                and cell(row, 'nat_available').lower() in ('yes', 'y', 'true', '1')):
+            yield {**base, 'source_key': f'{sequence}|NAT|-',
+                   'label_type': 'NAT', 'label_tag': '-'}

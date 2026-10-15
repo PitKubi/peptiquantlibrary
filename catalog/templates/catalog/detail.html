@@ -1,41 +1,33 @@
 {% extends 'catalog/base.html' %}
 {% block title %}{{ peptide.peptide_sequence }} · PeptiQuant Library{% endblock %}
 {% block content %}
-<h1 class="seq">{{ peptide.peptide_sequence }}</h1>
-<table style="max-width:640px">
-  <tr><th>Label type</th><td><span class="pill {{ peptide.label_type|lower }}">{{ peptide.label_type }}</span>
-      {% if peptide.label_tag and peptide.label_tag != '-' %}{{ peptide.label_tag }}{% endif %}</td></tr>
-  {% if peptide.gene_name %}<tr><th>Gene</th><td>{{ peptide.gene_name }}</td></tr>{% endif %}
+<h1 class="seq copy" style="font-size:24px">{{ peptide.peptide_sequence }}</h1>
+<p class="note">Click any value to copy it.</p>
+<table style="max-width:680px">
+  {% if peptide.gene_name %}<tr><th>Gene</th>
+      <td><span class="copy">{{ peptide.gene_name }}</span></td></tr>{% endif %}
+  {% if peptide.protein_name %}<tr><th>Protein</th>
+      <td><span class="copy">{{ peptide.protein_name }}</span></td></tr>{% endif %}
   {% if peptide.uniprot_id %}<tr><th>UniProt</th>
-      <td><a href="https://www.uniprot.org/uniprotkb/{{ peptide.uniprot_id }}" rel="noopener">{{ peptide.uniprot_id }}</a></td></tr>{% endif %}
-  {% if peptide.protein_name %}<tr><th>Protein</th><td>{{ peptide.protein_name }}</td></tr>{% endif %}
+      <td><span class="copy">{{ peptide.uniprot_id }}</span>
+          <a href="https://www.uniprot.org/uniprotkb/{{ peptide.uniprot_id }}"
+             rel="noopener">view on UniProt &#8599;</a></td></tr>{% endif %}
   {% if peptide.species %}<tr><th>Species</th><td>{{ peptide.species }}</td></tr>{% endif %}
-  {% if peptide.native_mutant and peptide.native_mutant != '-' %}
-  <tr><th>Variant</th><td>{{ peptide.native_mutant }}</td></tr>{% endif %}
-  <tr><th>Quality control</th><td>
-    {% if peptide.mass_confirmed %}Mass confirmed (TTOF).{% endif %}
-    {% if peptide.purity_confirmed %}Purity confirmed{% if peptide.cze_purity %} (CZE {{ peptide.cze_purity|floatformat:2 }}){% endif %}.{% endif %}
-    {% if not peptide.mass_confirmed and not peptide.purity_confirmed %}QC on request.{% endif %}
-  </td></tr>
-  <tr><th>Availability</th><td>
-    {% if peptide.in_stock %}<span class="pill stock">in stock</span>{% else %}on request{% endif %}
-  </td></tr>
+  <tr><th>SIS (labeled)</th><td>
+    {% if peptide.sis_available %}<span class="pill avail">available</span>
+      {% if peptide.sis_label_tags %} &nbsp;label: {{ peptide.sis_label_tags }}{% endif %}
+    {% else %}<span class="pill req">on request</span>{% endif %}</td></tr>
+  <tr><th>NAT (unlabeled)</th><td>
+    {% if peptide.nat_available %}<span class="pill avail">available</span>
+    {% else %}<span class="pill req">on request</span>{% endif %}</td></tr>
 </table>
 
-<form method="post" action="/request/" style="margin-top:18px">
+<form method="post" action="/selection/" style="margin-top:18px">
   {% csrf_token %}
+  <input type="hidden" name="action" value="add">
   <input type="hidden" name="peptide" value="{{ peptide.id }}">
-  <button type="submit">Request a quote</button>
+  <input type="hidden" name="next" value="/request/">
+  <button type="submit">Add to your list</button>
+  <a href="/" style="margin-left:12px">back to the library</a>
 </form>
-
-{% if counterparts %}
-<h2 style="font-size:19px;margin-top:28px">Same sequence, other label</h2>
-<ul>
-{% for c in counterparts %}
-  <li><a href="/peptide/{{ c.id }}/">{{ c.label_type }}
-      {% if c.label_tag and c.label_tag != '-' %}{{ c.label_tag }}{% endif %}</a>
-      {% if c.in_stock %}(in stock){% endif %}</li>
-{% endfor %}
-</ul>
-{% endif %}
 {% endblock %}

@@ -10,14 +10,27 @@ nginx vhost. It touches SysQuan only through `sync_catalog --from-db`, a
 SELECT-only Postgres role over two tables. Moving hosts = copy this directory,
 re-run `deploy/SERVER_SETUP.md`, repoint DNS.
 
+## Data flow
+
+SourcePeptideLot (raw synced lots) + FastaAnnotation (peptide -> proteome
+matches) -> `publish_catalog` -> PublicPeptide: exactly one row per sequence
+with SIS/NAT availability, the shape shown publicly. Eligibility = workflow
+status "(9) In inventory" (or a curated spreadsheet source). Curated SysQuan
+annotation always beats FASTA-derived values; only unambiguous FASTA matches
+are published, the rest land in the curation report for Maria.
+
 ## Layout
 
-- `catalog/` — models (CatalogPeptide, QuoteRequest, SyncRun), public views,
-  token-protected admin API (`/api/admin/…`: health, deploy, sync, logs,
-  quote-requests)
+- `catalog/` — models (SourcePeptideLot, FastaAnnotation, PublicPeptide,
+  QuoteRequest, SyncRun), public views (search + bulk paste + session
+  selection + quote request), token-protected admin API (`/api/admin/…`:
+  health, deploy, sync, logs, quote-requests)
+- `catalog/annotation.py` — FASTA parsing and peptide-to-proteome matching
+- `catalog/publish.py` — grouping, species normalization, eligibility
 - `catalog/sync/` — source readers (SysQuan Postgres, catalog xlsx) and upsert
-- `catalog/management/commands/` — `sync_catalog`, `catalog_stats`,
-  `export_catalog`, `import_catalog`
+- `catalog/management/commands/` — `sync_catalog`, `annotate_from_fasta`,
+  `publish_catalog`, `catalog_stats`, `curation_report`, `export_catalog`,
+  `import_catalog`
 - `deploy/` — deploy.sh (self-deploy), systemd unit, nginx vhost, read-only
   role SQL, SERVER_SETUP.md (the full runbook)
 

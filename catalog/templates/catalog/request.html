@@ -1,31 +1,53 @@
 {% extends 'catalog/base.html' %}
-{% block title %}Request a quote · PeptiQuant Library{% endblock %}
+{% block title %}Your list · PeptiQuant Library{% endblock %}
 {% block content %}
-<h1>Request a quote</h1>
+<h1>Your list</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if not peptides %}
-<p>No peptides selected yet. <a href="/">Search the catalog</a> and tick the
-peptides you are interested in.</p>
+<p>Your list is empty. <a href="/">Search the library</a> and tick the peptides
+you are interested in.</p>
 {% else %}
-<table style="max-width:760px">
-<tr><th>Peptide</th><th>Label</th><th>Gene</th><th>UniProt</th></tr>
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="submit_request" value="1">
+<table style="max-width:860px">
+<tr><th>Peptide</th><th>Gene</th><th>UniProt</th><th>SIS</th><th>NAT</th><th></th></tr>
 {% for p in peptides %}
-<tr><td class="seq">{{ p.peptide_sequence }}</td>
-    <td>{{ p.label_type }}{% if p.label_tag and p.label_tag != '-' %} {{ p.label_tag }}{% endif %}</td>
-    <td>{{ p.gene_name }}</td><td>{{ p.uniprot_id }}</td></tr>
+<tr>
+  <td><span class="seq copy">{{ p.peptide_sequence }}</span></td>
+  <td><span class="copy">{{ p.gene_name }}</span></td>
+  <td><span class="copy">{{ p.uniprot_id }}</span></td>
+  <td><label class="note"><input type="checkbox" name="sis_{{ p.id }}"
+      {% if p.sis_available %}checked{% endif %}>
+      {% if not p.sis_available %}on request{% endif %}</label></td>
+  <td><label class="note"><input type="checkbox" name="nat_{{ p.id }}"
+      {% if p.nat_available %}checked{% endif %}>
+      {% if not p.nat_available %}on request{% endif %}</label></td>
+  <td><button class="small" type="submit" form="remove-{{ p.id }}">remove</button></td>
+</tr>
 {% endfor %}
 </table>
 
-<form method="post" style="max-width:560px;display:grid;gap:12px;margin-top:20px">
-  {% csrf_token %}
-  {% for p in peptides %}<input type="hidden" name="peptide" value="{{ p.id }}">{% endfor %}
-  <input type="hidden" name="submit_request" value="1">
+<p class="note">Untick the forms you do not need; a ticked "on request" form is
+quoted as a new synthesis.</p>
+
+<div style="max-width:560px;display:grid;gap:12px;margin-top:20px">
   <label>Name<br><input type="text" name="name" value="{{ name }}" style="width:100%"></label>
   <label>Email<br><input type="email" name="email" value="{{ email }}" style="width:100%"></label>
   <label>Organization<br><input type="text" name="organization" value="{{ organization }}" style="width:100%"></label>
   <label>Message (quantities, formats, timeline)<br>
     <textarea name="message" rows="4" style="width:100%">{{ message }}</textarea></label>
-  <button type="submit">Send request</button>
+  <div><button type="submit">Request a quote</button></div>
+</div>
 </form>
+
+{% for p in peptides %}
+<form id="remove-{{ p.id }}" method="post" action="/selection/">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="remove">
+  <input type="hidden" name="peptide" value="{{ p.id }}">
+  <input type="hidden" name="next" value="/request/">
+</form>
+{% endfor %}
 {% endif %}
 {% endblock %}
