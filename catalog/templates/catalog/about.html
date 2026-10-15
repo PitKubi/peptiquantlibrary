@@ -12,6 +12,69 @@ paste a whole target list, add peptides to your list and request a quote.
 Peptides not marked available can be synthesized on demand.</p>
 <p style="max-width:720px">The catalog is curated and kept current by the MRM
 Proteomics team.</p>
+
+<style>
+.stats-grid { display: flex; gap: 24px; flex-wrap: wrap; margin: 8px 0 4px; }
+.stat-card { border: 1px solid var(--line); border-radius: 8px;
+             padding: 16px 20px 14px; flex: 1; min-width: 300px; }
+.stat-card h3 { margin: 0 0 12px; font-size: 15px; color: var(--navy); }
+.hbar-row { display: grid; grid-template-columns: 90px 1fr 70px; gap: 10px;
+            align-items: center; margin: 7px 0; font-size: 14px; }
+.hbar-track { background: var(--bg-soft); border-radius: 4px; height: 18px; }
+.hbar-fill { background: var(--navy-2); border-radius: 4px; height: 18px; }
+.hbar-count { text-align: right; font-variant-numeric: tabular-nums; }
+.histogram { display: flex; align-items: flex-end; gap: 3px; height: 130px;
+             margin-top: 14px; }
+.histogram .col { flex: 1; display: flex; flex-direction: column;
+                  justify-content: flex-end; height: 100%; }
+.histogram .bar { background: var(--navy-2); border-radius: 2px 2px 0 0;
+                  min-height: 1px; }
+.histogram-labels { display: flex; gap: 3px; margin-top: 4px; }
+.histogram-labels span { flex: 1; text-align: center; font-size: 11px;
+                         color: var(--ink); }
+</style>
+
+<h2>Catalog statistics</h2>
+<div class="stats-grid">
+  <div class="stat-card">
+    <h3>Availability ({{ total }} peptides)</h3>
+    {% for row in availability %}
+    <div class="hbar-row">
+      <span>{{ row.label }}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:{{ row.pct }}%"></div></div>
+      <span class="hbar-count">{{ row.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="stat-card">
+    <h3>Peptides per protein ({{ proteins }} proteins)</h3>
+    {% for row in per_protein %}
+    <div class="hbar-row">
+      <span>{{ row.label }} peptide{% if row.label != '1' %}s{% endif %}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:{{ row.pct }}%"></div></div>
+      <span class="hbar-count">{{ row.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="stat-card" style="margin-top:20px">
+  <h3>Peptide length distribution (amino acids)</h3>
+  <div class="histogram">
+    {% for bar in length_histogram %}
+    <div class="col" title="{{ bar.label }} aa: {{ bar.count }} peptides">
+      <div class="bar" style="height:{{ bar.pct }}%"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="histogram-labels">
+    {% for bar in length_histogram %}<span>{{ bar.label }}</span>{% endfor %}
+  </div>
+</div>
+{% if last_sync %}
+<p class="note">Synced nightly from the MRM Proteomics synthesis LIMS.
+Last update: {{ last_sync|date:"Y-m-d" }}.</p>
+{% endif %}
+
 <div class="onco-banner">For ready-made cancer-mutation assay kits, visit
 <a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>.</div>
 {% endblock %}

@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -7,7 +8,7 @@ from django.db.models import Case, Q, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import (FastaAnnotation, PublicPeptide, QuoteRequest,
-                     QuoteRequestItem)
+                     QuoteRequestItem, SyncRun)
 
 PAGE_SIZE = 50
 SELECTION_SESSION_KEY = 'selection'
@@ -243,8 +244,49 @@ def request_done(request):
                   {'selection_count': 0})
 
 
+def _availability_breakdown(public):
+    total = public.count() or 1
+    rows = [
+        ('SIS + NAT', public.filter(sis_available=True, nat_available=True).count()),
+        ('SIS only', public.filter(sis_available=True, nat_available=False).count()),
+        ('NAT only', public.filter(sis_available=False, nat_available=True).count()),
+    ]
+    return [{'label': label, 'count': count,
+             'pct': round(100 * count / total, 1)} for label, count in rows]
+
+
+def _peptides_per_protein(public):
+    per_protein = Counter(public.exclude(uniprot_id='')
+                          .values_list('uniprot_id', flat=True))
+    buckets = Counter()
+    for n in per_protein.values():
+        buckets['1' if n == 1 else '2' if n == 2 else '3+'] += 1
+    peak = max(buckets.values(), default=1) or 1
+    return [{'label': label, 'count': buckets.get(label, 0),
+             'pct': round(100 * buckets.get(label, 0) / peak, 1)}
+            for label in ('1', '2', '3+')]
+
+
+def _length_histogram(public):
+    counts = Counter(len(s) for s in
+                     public.values_list('peptide_sequence', flat=True))
+    bars = ([('<7', sum(c for length, c in counts.items() if length < 7))]
+            + [(str(length), counts.get(length, 0)) for length in range(7, 26)]
+            + [('>25', sum(c for length, c in counts.items() if length > 25))])
+    peak = max((c for _, c in bars), default=1) or 1
+    return [{'label': label, 'count': count,
+             'pct': round(100 * count / peak, 1)} for label, count in bars]
+
+
 def about(request):
+    public = PublicPeptide.objects
+    last_sync = (SyncRun.objects.filter(ok=True)
+                 .order_by('-started_at').first())
     return render(request, 'catalog/about.html', {
         'selection_count': len(_selection(request)),
+        'availability': _availability_breakdown(public),
+        'per_protein': _peptides_per_protein(public),
+        'length_histogram': _length_histogram(public),
+        'last_sync': last_sync.started_at if last_sync else None,
         **_hero_stats(),
     })
