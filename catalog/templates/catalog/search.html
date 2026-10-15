@@ -60,7 +60,7 @@
 <tr>
   <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
   <td><span class="seq copy">{{ p.peptide_sequence }}</span>
-      <a href="/peptide/{{ p.id }}/" title="Details">&#8505;</a></td>
+      <a href="/peptide/{{ p.peptide_sequence }}/" title="Details">&#8505;</a></td>
   <td><span class="copy">{{ p.gene_name }}</span></td>
   <td class="opt"><span class="copy">{{ p.protein_name }}</span></td>
   <td>{% if p.uniprot_id %}<span class="copy">{{ p.uniprot_id }}</span>

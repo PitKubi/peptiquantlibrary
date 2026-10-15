@@ -68,7 +68,7 @@ def publish_catalog():
             peptide_sequence__in=list(lots_by_sequence))
     }
 
-    rows = []
+    rows = {}
     for sequence, lots in lots_by_sequence.items():
         curated = {
             'gene_name': _first_non_empty(l.gene_name for l in lots),
@@ -90,8 +90,7 @@ def publish_catalog():
         sis_lots = [l for l in lots if l.label_type == 'SIS']
         tags = sorted({l.label_tag for l in sis_lots
                        if l.label_tag and l.label_tag != '-'})
-        rows.append(PublicPeptide(
-            peptide_sequence=sequence,
+        rows[sequence] = dict(
             sis_available=bool(sis_lots),
             nat_available=any(l.label_type == 'NAT' for l in lots),
             sis_label_tags=', '.join(tags),
@@ -100,11 +99,27 @@ def publish_catalog():
                                else 'fasta' if used_fasta else ''),
             lot_count=len(lots),
             **curated,
-        ))
+        )
 
+    # Upsert keyed by sequence, never delete-and-recreate: row ids (and with
+    # them open pages, bookmarks and session selections) must survive a
+    # republish. Found the hard way when every publish 404'd the detail links
+    # of already-open pages.
     with transaction.atomic():
-        PublicPeptide.objects.all().delete()
-        PublicPeptide.objects.bulk_create(rows, batch_size=1000)
+        existing = {p.peptide_sequence: p for p in PublicPeptide.objects.all()}
+        for sequence, values in rows.items():
+            current = existing.get(sequence)
+            if current is None:
+                PublicPeptide.objects.create(peptide_sequence=sequence, **values)
+                continue
+            changed = [f for f, v in values.items() if getattr(current, f) != v]
+            if changed:
+                for f in changed:
+                    setattr(current, f, values[f])
+                current.save(update_fields=changed + ['published_at'])
+        gone = set(existing) - set(rows)
+        if gone:
+            PublicPeptide.objects.filter(peptide_sequence__in=gone).delete()
 
     run.rows_seen = sum(len(v) for v in lots_by_sequence.values()) + len(rejected)
     run.rows_created = len(rows)

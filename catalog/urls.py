@@ -4,7 +4,7 @@ from . import admin_api, views
 
 urlpatterns = [
     path('', views.search, name='search'),
-    path('peptide/<int:peptide_id>/', views.peptide_detail, name='peptide_detail'),
+    path('peptide/<str:sequence>/', views.peptide_detail, name='peptide_detail'),
     path('selection/', views.selection, name='selection'),
     path('request/', views.quote_request, name='quote_request'),
     path('request/done/', views.request_done, name='request_done'),

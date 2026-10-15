@@ -190,11 +190,19 @@ class AnnotationTests(TestCase):
                     'test')
         from django.core.management import call_command
         call_command('annotate_from_fasta', self._fasta_path())
-        public = PublicPeptide.objects.get()
-        response = self.client.get(f'/peptide/{public.id}/')
+        response = self.client.get('/peptide/LVNEVTEFAK/')
         self.assertContains(response, '<mark')
         self.assertContains(response, 'Peptide in protein')
         self.assertContains(response, 'P02768')
+
+    def test_republish_keeps_row_ids_and_urls(self):
+        upsert_rows([lot_row()], 'test')
+        publish_catalog()
+        row_id = PublicPeptide.objects.get().id
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.get().id, row_id)
+        response = self.client.get('/peptide/LVNEVTEFAK/')
+        self.assertEqual(response.status_code, 200)
 
 
 class XlsxSourceTests(TestCase):

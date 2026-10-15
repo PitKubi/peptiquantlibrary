@@ -97,8 +97,9 @@ def _bulk_filter(peptides, bulk):
     return peptides.filter(matched), unmatched
 
 
-def peptide_detail(request, peptide_id):
-    peptide = get_object_or_404(PublicPeptide, id=peptide_id)
+def peptide_detail(request, sequence):
+    peptide = get_object_or_404(PublicPeptide,
+                                peptide_sequence=sequence.strip().upper())
     return render(request, 'catalog/detail.html', {
         'peptide': peptide,
         'protein_view': _protein_with_peptide_highlighted(peptide),
