@@ -1,0 +1,5 @@
+Django>=5.2
+gunicorn>=22.0
+openpyxl>=3.1
+# psycopg2-binary is only needed where sync_catalog --from-db runs (the server);
+# install it there with: pip install psycopg2-binary

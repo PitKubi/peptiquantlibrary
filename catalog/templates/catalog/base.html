@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}PeptiQuant Library{% endblock %}</title>
+<style>
+:root {
+  --ink: #1a1a1a;
+  --accent: #0b5e8a;
+  --accent-dark: #084563;
+  --line: #d8d8d8;
+  --bg-soft: #f4f7f9;
+  --ok: #1b7a3d;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: var(--ink); background: #fff;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header { background: var(--accent-dark); padding: 0 16px; }
+header .inner {
+  max-width: 1100px; margin: 0 auto; display: flex; align-items: baseline;
+  gap: 24px; padding: 14px 0; flex-wrap: wrap;
+}
+header a { color: #fff; text-decoration: none; }
+header .brand { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+header nav a { margin-right: 18px; font-size: 15px; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 16px; }
+a { color: var(--accent); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { background: var(--bg-soft); font-weight: 600; }
+tr:hover td { background: var(--bg-soft); }
+.seq { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.pill {
+  display: inline-block; padding: 1px 9px; border-radius: 10px;
+  font-size: 12px; font-weight: 600; border: 1px solid var(--line);
+}
+.pill.sis { background: #e8f1f7; color: var(--accent-dark); border-color: #b9d4e4; }
+.pill.nat { background: #f1f1f1; color: var(--ink); }
+.pill.stock { background: #e7f3ec; color: var(--ok); border-color: #bfdfcc; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; align-items: center; }
+input[type=text], input[type=email], select, textarea {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; color: var(--ink);
+}
+input[type=text].grow { flex: 1; min-width: 260px; }
+button, .btn {
+  padding: 8px 18px; border: 0; border-radius: 6px; background: var(--accent);
+  color: #fff; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+button:hover, .btn:hover { background: var(--accent-dark); }
+label.check { display: inline-flex; gap: 6px; align-items: center; }
+.note { font-size: 14px; }
+.error { color: #a4231c; font-weight: 600; }
+.pager { margin-top: 16px; display: flex; gap: 14px; }
+footer { border-top: 1px solid var(--line); margin-top: 40px; }
+footer .inner { max-width: 1100px; margin: 0 auto; padding: 18px 16px; font-size: 14px; }
+@media (max-width: 700px) {
+  th:nth-child(6), td:nth-child(6), th:nth-child(7), td:nth-child(7) { display: none; }
+}
+</style>
+</head>
+<body>
+<header><div class="inner">
+  <a class="brand" href="/">PeptiQuant Library</a>
+  <nav>
+    <a href="/">Search</a>
+    <a href="/about/">About</a>
+  </nav>
+</div></header>
+<main>{% block content %}{% endblock %}</main>
+<footer><div class="inner">
+  PeptiQuant Library · synthetic proteotypic peptides, curated by MRM Proteomics.
+</div></footer>
+</body>
+</html>

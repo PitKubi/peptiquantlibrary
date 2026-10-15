@@ -1,0 +1,31 @@
+{% extends 'catalog/base.html' %}
+{% block title %}Request a quote · PeptiQuant Library{% endblock %}
+{% block content %}
+<h1>Request a quote</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if not peptides %}
+<p>No peptides selected yet. <a href="/">Search the catalog</a> and tick the
+peptides you are interested in.</p>
+{% else %}
+<table style="max-width:760px">
+<tr><th>Peptide</th><th>Label</th><th>Gene</th><th>UniProt</th></tr>
+{% for p in peptides %}
+<tr><td class="seq">{{ p.peptide_sequence }}</td>
+    <td>{{ p.label_type }}{% if p.label_tag and p.label_tag != '-' %} {{ p.label_tag }}{% endif %}</td>
+    <td>{{ p.gene_name }}</td><td>{{ p.uniprot_id }}</td></tr>
+{% endfor %}
+</table>
+
+<form method="post" style="max-width:560px;display:grid;gap:12px;margin-top:20px">
+  {% csrf_token %}
+  {% for p in peptides %}<input type="hidden" name="peptide" value="{{ p.id }}">{% endfor %}
+  <input type="hidden" name="submit_request" value="1">
+  <label>Name<br><input type="text" name="name" value="{{ name }}" style="width:100%"></label>
+  <label>Email<br><input type="email" name="email" value="{{ email }}" style="width:100%"></label>
+  <label>Organization<br><input type="text" name="organization" value="{{ organization }}" style="width:100%"></label>
+  <label>Message (quantities, formats, timeline)<br>
+    <textarea name="message" rows="4" style="width:100%">{{ message }}</textarea></label>
+  <button type="submit">Send request</button>
+</form>
+{% endif %}
+{% endblock %}

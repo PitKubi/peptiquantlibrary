@@ -1,0 +1,63 @@
+{% extends 'catalog/base.html' %}
+{% block content %}
+<h1>Find synthetic peptides</h1>
+<p class="note">{{ total }} peptides, labeled (SIS) and unlabeled (NAT), each
+synthesized and quality-controlled in house. Search by gene, UniProt accession,
+protein name or peptide sequence, then request a quote.</p>
+
+<form method="get" class="controls">
+  <input class="grow" type="text" name="q" value="{{ query }}"
+         placeholder="e.g. ALB, P02768, serum albumin, or LVNEVTEFAK">
+  <select name="label_type">
+    <option value="">SIS + NAT</option>
+    <option value="SIS" {% if label_type == 'SIS' %}selected{% endif %}>SIS only</option>
+    <option value="NAT" {% if label_type == 'NAT' %}selected{% endif %}>NAT only</option>
+  </select>
+  {% if species_options %}
+  <select name="species">
+    <option value="">All species</option>
+    {% for s in species_options %}
+    <option value="{{ s }}" {% if species == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <label class="check"><input type="checkbox" name="in_stock" value="1"
+         {% if stock_only %}checked{% endif %}> in stock</label>
+  <button type="submit">Search</button>
+</form>
+
+{% if searched %}
+<form method="post" action="/request/">
+<p class="note">{{ page.paginator.count }} result{{ page.paginator.count|pluralize }}.
+Tick peptides and <button type="submit">Request a quote</button></p>
+<table>
+<tr><th></th><th>Peptide</th><th>Label</th><th>Gene</th><th>UniProt</th>
+    <th>Protein</th><th>Species</th><th>QC</th><th>Availability</th></tr>
+{% for p in page %}
+<tr>
+  <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
+  <td class="seq"><a href="/peptide/{{ p.id }}/">{{ p.peptide_sequence }}</a></td>
+  <td><span class="pill {{ p.label_type|lower }}">{{ p.label_type }}</span>
+      {% if p.label_tag and p.label_tag != '-' %}{{ p.label_tag }}{% endif %}</td>
+  <td>{{ p.gene_name }}</td>
+  <td>{% if p.uniprot_id %}<a href="https://www.uniprot.org/uniprotkb/{{ p.uniprot_id }}"
+       rel="noopener">{{ p.uniprot_id }}</a>{% endif %}</td>
+  <td>{{ p.protein_name }}</td>
+  <td>{{ p.species }}</td>
+  <td>{% if p.mass_confirmed %}mass{% endif %}{% if p.mass_confirmed and p.purity_confirmed %} + {% endif %}{% if p.purity_confirmed %}purity{% endif %}</td>
+  <td>{% if p.in_stock %}<span class="pill stock">in stock</span>{% else %}on request{% endif %}</td>
+</tr>
+{% empty %}
+<tr><td colspan="9">No peptides match. Try a shorter query, or request a custom
+synthesis via the <a href="/about/">contact details</a>.</td></tr>
+{% endfor %}
+</table>
+<div class="pager">
+  {% if page.has_previous %}<a href="?q={{ query }}&label_type={{ label_type }}&species={{ species }}{% if stock_only %}&in_stock=1{% endif %}&page={{ page.previous_page_number }}">&larr; previous</a>{% endif %}
+  {% if page.paginator.num_pages > 1 %}<span>page {{ page.number }} / {{ page.paginator.num_pages }}</span>{% endif %}
+  {% if page.has_next %}<a href="?q={{ query }}&label_type={{ label_type }}&species={{ species }}{% if stock_only %}&in_stock=1{% endif %}&page={{ page.next_page_number }}">next &rarr;</a>{% endif %}
+</div>
+{% csrf_token %}
+</form>
+{% endif %}
+{% endblock %}
