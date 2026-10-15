@@ -86,8 +86,8 @@ class PublishTests(TestCase):
         ], 'test')
         FastaAnnotation.objects.create(
             peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
-            gene_name='ALB', protein_name='Serum albumin', species='Human',
-            match_count=1)
+            gene_name='ALB', protein_name='Serum albumin',
+            species='Homo sapiens', match_count=1)
         FastaAnnotation.objects.create(
             peptide_sequence='AGLQFPVGR', uniprot_id='OTHER',
             gene_name='FASTA_GENE', protein_name='Other', species='Human',
@@ -96,6 +96,7 @@ class PublishTests(TestCase):
         filled = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
         self.assertEqual(filled.gene_name, 'ALB')
         self.assertEqual(filled.protein_name, 'Serum albumin')
+        self.assertEqual(filled.species, 'Human')
         self.assertEqual(filled.annotation_source, 'fasta')
         curated = PublicPeptide.objects.get(peptide_sequence='AGLQFPVGR')
         self.assertEqual(curated.gene_name, 'CURATED')

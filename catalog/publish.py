@@ -80,7 +80,9 @@ def publish_catalog():
         if fasta is not None:
             for field in ('gene_name', 'uniprot_id', 'protein_name', 'species'):
                 if not curated[field] and getattr(fasta, field):
-                    curated[field] = getattr(fasta, field)
+                    value = getattr(fasta, field)
+                    curated[field] = (normalize_species(value)
+                                      if field == 'species' else value)
                     used_fasta = True
         sis_lots = [l for l in lots if l.label_type == 'SIS']
         tags = sorted({l.label_tag for l in sis_lots
