@@ -108,6 +108,22 @@ class PublishTests(TestCase):
         self.assertEqual(normalize_species(''), '')
         self.assertEqual(normalize_species('rattus norvegicus'),
                          'Rattus norvegicus')
+        self.assertEqual(normalize_species('Mus musculus + Homo sapiens'),
+                         'Human + Mouse')
+
+    def test_conserved_peptide_lists_both_species(self):
+        upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='')],
+                    'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='',
+            gene_name='ALB', protein_name='Albumin',
+            species='Homo sapiens + Mus musculus', match_count=2)
+        publish_catalog()
+        public = PublicPeptide.objects.get()
+        self.assertEqual(public.species, 'Human + Mouse')
+
+        response = self.client.get('/', {'species': 'Mouse'})
+        self.assertContains(response, 'LVNEVTEFAK')
 
 
 FASTA = """>sp|P02768|ALBU_HUMAN Serum albumin OS=Homo sapiens (Human) OX=9606 GN=ALB PE=1 SV=2

@@ -100,10 +100,12 @@ def assignment_from_matches(entries):
     species_set = {species for _, _, _, species in entries if species}
     unambiguous_gene = len(genes) == 1 and len({g for _, g, _, _ in entries}) >= 1
     first = entries[0]
+    # A conserved peptide can occur in several species (Peter: "some species
+    # can be both"); all of them are reported, joined with ' + '.
     return {
         'uniprot_id': first[0] if len(entries) == 1 else '',
         'gene_name': first[1] if unambiguous_gene else '',
         'protein_name': first[2] if unambiguous_gene else '',
-        'species': species_set.pop() if len(species_set) == 1 else '',
+        'species': ' + '.join(sorted(species_set)),
         'match_count': len(entries),
     }

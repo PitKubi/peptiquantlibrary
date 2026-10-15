@@ -26,6 +26,9 @@ def normalize_species(raw):
     value = (raw or '').strip()
     if not value:
         return ''
+    if '+' in value:
+        parts = [normalize_species(p) for p in value.split('+')]
+        return ' + '.join(sorted({p for p in parts if p}))
     lowered = value.lower()
     if lowered in SPECIES_NORMALIZATION:
         return SPECIES_NORMALIZATION[lowered]

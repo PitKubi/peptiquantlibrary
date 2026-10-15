@@ -49,12 +49,16 @@ def search(request):
     elif availability == 'nat':
         peptides = peptides.filter(nat_available=True)
     if species:
-        peptides = peptides.filter(species=species)
+        # Component match, not equality: a conserved "Human + Mouse" peptide
+        # belongs in both the Human and the Mouse filter.
+        peptides = peptides.filter(species__icontains=species)
 
     page = Paginator(peptides, PAGE_SIZE).get_page(request.GET.get('page'))
-    species_options = (PublicPeptide.objects.exclude(species='')
-                       .values_list('species', flat=True)
-                       .distinct().order_by('species'))
+    species_options = sorted({
+        part for value in PublicPeptide.objects.exclude(species='')
+        .values_list('species', flat=True).distinct()
+        for part in value.split(' + ')
+    })
     return render(request, 'catalog/search.html', {
         'page': page,
         'query': query,
