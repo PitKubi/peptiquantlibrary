@@ -128,20 +128,18 @@ def assignment_from_matches(entries):
     if not entries:
         return {'uniprot_id': '', 'gene_name': '', 'protein_name': '',
                 'species': '', 'match_count': 0}
-    genes = {gene.upper() for _, gene, _, _ in entries if gene}
     species_set = {species for _, _, _, species in entries if species}
-    unambiguous_gene = len(genes) <= 1
     first = entries[0]
     # A conserved peptide can occur in several species (Peter: "some species
-    # can be both"); all of them are reported, joined with ' + '. The accession
-    # is ALWAYS filled (Peter: every peptide needs one) — for a multi-gene
-    # peptide it is the first match as representative, with match_count
-    # carrying the shared-ness for the detail page; gene/protein stay blank
-    # only when the matches disagree on the gene.
+    # can be both"); all of them are reported, joined with ' + '. Accession,
+    # gene and protein are ALWAYS filled from the first match as the
+    # representative (Peter: every peptide needs its annotation visible);
+    # match_count carries the shared-ness, which the detail page discloses as
+    # "occurs in N proteins".
     return {
         'uniprot_id': first[0],
-        'gene_name': first[1] if unambiguous_gene else '',
-        'protein_name': first[2] if unambiguous_gene else '',
+        'gene_name': first[1],
+        'protein_name': first[2],
         'species': ' + '.join(sorted(species_set)),
         'match_count': len(entries),
     }

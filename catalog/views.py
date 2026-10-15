@@ -3,7 +3,7 @@ import re
 from django.conf import settings
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Case, Q, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import (FastaAnnotation, PublicPeptide, QuoteRequest,
@@ -40,7 +40,12 @@ def search(request):
     species = request.GET.get('species') or ''
     bulk = (request.GET.get('bulk') or '').strip()
 
-    peptides = PublicPeptide.objects.all()
+    # Annotated rows first: alphabetical-by-gene alone put every blank-gene
+    # row on page 1, which read as "most peptides are unannotated".
+    peptides = PublicPeptide.objects.annotate(
+        gene_missing=Case(When(gene_name='', then=Value(1)),
+                          default=Value(0))
+    ).order_by('gene_missing', 'gene_name', 'peptide_sequence')
     unmatched_tokens = []
     if bulk:
         peptides, unmatched_tokens = _bulk_filter(peptides, bulk)

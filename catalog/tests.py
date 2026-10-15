@@ -162,12 +162,8 @@ class AnnotationTests(TestCase):
         matches, _, _ = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
         entries = matches['SHAREDPEPK']
         self.assertEqual(len(entries), 3)
-        same_gene = [e for e in entries if e[1] == 'SHRD']
-        assignment = assignment_from_matches(same_gene)
-        self.assertEqual(assignment['gene_name'], 'SHRD')
-        self.assertEqual(assignment['uniprot_id'], 'Q00001')
         assignment = assignment_from_matches(entries)
-        self.assertEqual(assignment['gene_name'], '')
+        self.assertEqual(assignment['gene_name'], 'SHRD')
         self.assertEqual(assignment['uniprot_id'], 'Q00001')
         self.assertEqual(assignment['match_count'], 3)
 
