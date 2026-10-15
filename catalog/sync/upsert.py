@@ -6,7 +6,7 @@ UPSERT_FIELDS = [
     'mrmp_id', 'peptide_sequence', 'label_type', 'label_tag', 'native_mutant',
     'species_raw', 'phospho_present', 'uniprot_id', 'gene_name', 'protein_name',
     'mass_confirmed', 'purity_confirmed', 'cze_purity', 'aaa_ratio',
-    'workflow_status',
+    'workflow_status', 'project_category',
 ]
 
 

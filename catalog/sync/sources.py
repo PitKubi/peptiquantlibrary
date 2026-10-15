@@ -22,7 +22,8 @@ WORKFLOW_SQL = """
     SELECT mrmp_id, peptide_sequence, label_type, label, native_mutant,
            species, phospho_present, uniprot_id, gene_name,
            mass_confirmed_post_synth, mass_confirmed_post_hplc,
-           purity_confirmed, cze_purity, aaa_ratio, workflow_status
+           purity_confirmed, cze_purity, aaa_ratio, workflow_status,
+           project_category
     FROM sysq_inhouse_peptideworkflowentry
     WHERE workflow_status != 'failed'
 """
@@ -67,6 +68,7 @@ def rows_from_sysquan_db(dsn):
                     'cze_purity': r['cze_purity'],
                     'aaa_ratio': r['aaa_ratio'],
                     'workflow_status': r['workflow_status'] or '',
+                    'project_category': (r['project_category'] or '').strip(),
                 }
             cursor.execute(INVENTORY_SQL)
             for r in cursor.fetchall():
@@ -91,6 +93,8 @@ def rows_from_sysquan_db(dsn):
                     # Legacy inventory rows ARE the curated inventory; they
                     # carry no workflow status, so eligibility is granted here.
                     'workflow_status': '9_inventory',
+                    # The legacy inventory table has no project column.
+                    'project_category': '',
                 }
 
 
@@ -163,6 +167,7 @@ def rows_from_xlsx(path, default_label_type='SIS'):
             'cze_purity': None,
             'aaa_ratio': None,
             'workflow_status': '',
+            'project_category': '',
         }
         yield {**base, 'source_key': f'{sequence}|{label_type}|{label_tag}',
                'label_type': label_type, 'label_tag': label_tag}

@@ -20,7 +20,7 @@ def lot_row(**overrides):
         'uniprot_id': 'P02768', 'gene_name': 'ALB', 'protein_name': '',
         'mass_confirmed': True, 'purity_confirmed': True,
         'cze_purity': 0.95, 'aaa_ratio': 1.01,
-        'workflow_status': '9_inventory',
+        'workflow_status': '9_inventory', 'project_category': 'In-house',
     }
     row.update(overrides)
     return row
@@ -76,6 +76,34 @@ class PublishTests(TestCase):
         run, rejected = publish_catalog()
         self.assertEqual(PublicPeptide.objects.count(), 0)
         self.assertEqual(len(rejected), 1)
+
+    def test_client_and_private_projects_never_publish(self):
+        upsert_rows([
+            lot_row(project_category='Acme Pharma - Client'),
+            lot_row(source_key='MRMP-5', mrmp_id='MRMP-5',
+                    peptide_sequence='AGLQFPVGR', project_category='private'),
+        ], 'test')
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.count(), 0)
+
+    def test_client_lot_does_not_hide_sequence_with_public_lot(self):
+        upsert_rows([
+            lot_row(project_category='Client'),
+            lot_row(source_key='MRMP-6', mrmp_id='MRMP-6',
+                    label_type='NAT', label_tag='-'),
+        ], 'test')
+        publish_catalog()
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertFalse(alb.sis_available)
+        self.assertTrue(alb.nat_available)
+        self.assertEqual(alb.lot_count, 1)
+
+    def test_nat_only_sequence_publishes(self):
+        upsert_rows([lot_row(label_type='NAT', label_tag='-')], 'test')
+        publish_catalog()
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertFalse(alb.sis_available)
+        self.assertTrue(alb.nat_available)
 
     def test_fasta_fills_blanks_but_curated_wins(self):
         upsert_rows([

@@ -39,6 +39,7 @@ class SourcePeptideLot(models.Model):
     cze_purity = models.FloatField(null=True, blank=True)
     aaa_ratio = models.FloatField(null=True, blank=True)
     workflow_status = models.CharField(max_length=30, blank=True)
+    project_category = models.CharField(max_length=100, blank=True)
 
     first_seen_at = models.DateTimeField(auto_now_add=True)
     synced_at = models.DateTimeField(auto_now=True)
@@ -52,7 +53,16 @@ class SourcePeptideLot(models.Model):
     # Per Peter 2026-10-15: only peptides physically in inventory are listed;
     # mid-production and failed lots stay internal. Spreadsheet catalogs are
     # curated inventory lists by definition.
+    # Confidentiality rule agreed with Maria (2026-10-15 call): a lot whose
+    # project category contains "client" or "private" never reaches the
+    # public catalog, whatever its inventory status. Maria flags such
+    # projects in the sysquan tool; Peter/Christoph decide everything else.
+    CONFIDENTIAL_CATEGORY_WORDS = ('client', 'private')
+
     def is_catalog_eligible(self):
+        category = self.project_category.lower()
+        if any(word in category for word in self.CONFIDENTIAL_CATEGORY_WORDS):
+            return False
         return (self.workflow_status == '9_inventory'
                 or self.source == 'catalog_xlsx')
 
