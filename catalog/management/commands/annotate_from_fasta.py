@@ -29,7 +29,7 @@ class Command(BaseCommand):
         }
         self.stdout.write(f'Matching {len(sequences)} sequences against '
                           f'{len(options["fasta"])} FASTA file(s)...')
-        matches = match_peptides(
+        matches, protein_sequences = match_peptides(
             sequences, options['fasta'],
             on_progress=lambda n: self.stdout.write(f'  {n} proteins scanned'))
 
@@ -38,6 +38,8 @@ class Command(BaseCommand):
         created = updated = 0
         for sequence in sequences:
             assignment = assignment_from_matches(matches.get(sequence, []))
+            assignment['protein_sequence'] = protein_sequences.get(
+                assignment['uniprot_id'], '')
             annotation = existing.get(sequence)
             if annotation is None:
                 FastaAnnotation.objects.create(

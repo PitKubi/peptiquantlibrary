@@ -147,28 +147,30 @@ class AnnotationTests(TestCase):
         return f.name
 
     def test_unique_match_annotates_fully(self):
-        matches = match_peptides({'LVNEVTEFAK'}, [self._fasta_path()])
+        matches, proteins = match_peptides({'LVNEVTEFAK'}, [self._fasta_path()])
         assignment = assignment_from_matches(matches['LVNEVTEFAK'])
         self.assertEqual(assignment['uniprot_id'], 'P02768')
         self.assertEqual(assignment['gene_name'], 'ALB')
         self.assertEqual(assignment['protein_name'], 'Serum albumin')
         self.assertEqual(assignment['species'], 'Human')
         self.assertEqual(assignment['match_count'], 1)
+        self.assertIn('LVNEVTEFAK', proteins['P02768'])
 
-    def test_shared_peptide_same_gene_keeps_gene_not_accession(self):
-        matches = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
+    def test_shared_peptide_same_gene_gets_canonical_accession(self):
+        matches, _ = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
         entries = matches['SHAREDPEPK']
         self.assertEqual(len(entries), 3)
         same_gene = [e for e in entries if e[1] == 'SHRD']
         assignment = assignment_from_matches(same_gene)
         self.assertEqual(assignment['gene_name'], 'SHRD')
-        self.assertEqual(assignment['uniprot_id'], '')
+        self.assertEqual(assignment['uniprot_id'], 'Q00001')
         assignment = assignment_from_matches(entries)
         self.assertEqual(assignment['gene_name'], '')
+        self.assertEqual(assignment['uniprot_id'], '')
         self.assertEqual(assignment['match_count'], 3)
 
     def test_unmatched_scores_zero(self):
-        matches = match_peptides({'WWWWWWWWWW'}, [self._fasta_path()])
+        matches, _ = match_peptides({'WWWWWWWWWW'}, [self._fasta_path()])
         assignment = assignment_from_matches(matches.get('WWWWWWWWWW', []))
         self.assertEqual(assignment['match_count'], 0)
 
@@ -180,6 +182,19 @@ class AnnotationTests(TestCase):
         public = PublicPeptide.objects.get()
         self.assertEqual(public.gene_name, 'ALB')
         self.assertEqual(public.annotation_source, 'fasta')
+        annotation = FastaAnnotation.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertIn('LVNEVTEFAK', annotation.protein_sequence)
+
+    def test_detail_highlights_peptide_in_protein(self):
+        upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='')],
+                    'test')
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', self._fasta_path())
+        public = PublicPeptide.objects.get()
+        response = self.client.get(f'/peptide/{public.id}/')
+        self.assertContains(response, '<mark')
+        self.assertContains(response, 'Peptide in protein')
+        self.assertContains(response, 'P02768')
 
 
 class XlsxSourceTests(TestCase):

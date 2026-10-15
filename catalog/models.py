@@ -70,6 +70,10 @@ class FastaAnnotation(models.Model):
     gene_name = models.CharField(max_length=100, blank=True)
     protein_name = models.CharField(max_length=255, blank=True)
     species = models.CharField(max_length=120, blank=True)
+    protein_sequence = models.TextField(
+        blank=True,
+        help_text='Sequence of the assigned protein, for the highlighted '
+                  'peptide-in-protein view on the detail page')
     match_count = models.IntegerField(default=0)
     fasta_label = models.CharField(max_length=255, blank=True)
     annotated_at = models.DateTimeField(auto_now=True)

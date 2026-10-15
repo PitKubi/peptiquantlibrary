@@ -22,6 +22,18 @@
     {% else %}<span class="pill req">on request</span>{% endif %}</td></tr>
 </table>
 
+{% if protein_view %}
+<h2 style="margin-top:28px">Peptide in protein
+  {% if protein_view.accession %}({{ protein_view.accession }}, {{ protein_view.length }} aa){% endif %}</h2>
+<p class="note">Position{{ protein_view.positions|pluralize }}
+  {{ protein_view.positions|join:', ' }} of {{ protein_view.length }}.</p>
+<div class="seq" style="max-width:860px; background: var(--bg-soft);
+     border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px;
+     line-height: 1.8; word-break: break-all;">
+  {% for segment in protein_view.segments %}{% if segment.match %}<mark style="background:#ffe08a;border-radius:3px;padding:1px 2px;font-weight:700">{{ segment.text }}</mark>{% else %}{{ segment.text }}{% endif %}{% endfor %}
+</div>
+{% endif %}
+
 <form method="post" action="/selection/" style="margin-top:18px">
   {% csrf_token %}
   <input type="hidden" name="action" value="add">

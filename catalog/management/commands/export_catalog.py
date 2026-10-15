@@ -6,7 +6,8 @@ from catalog.models import FastaAnnotation, SourcePeptideLot
 from catalog.sync.upsert import UPSERT_FIELDS
 
 ANNOTATION_FIELDS = ['peptide_sequence', 'uniprot_id', 'gene_name',
-                     'protein_name', 'species', 'match_count', 'fasta_label']
+                     'protein_name', 'species', 'protein_sequence',
+                     'match_count', 'fasta_label']
 
 
 class Command(BaseCommand):

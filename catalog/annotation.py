@@ -60,10 +60,11 @@ def _trim_species(species):
 
 
 def match_peptides(peptide_sequences, fasta_paths, on_progress=None):
-    """Return {sequence: [(accession, gene, protein, species), ...]} for every
-    input sequence found in the FASTA(s). One linear scan per protein with a
-    prefix index over the peptides, so runtime is proteome-bound, not
-    peptides x proteins."""
+    """Return ({sequence: [(accession, gene, protein, species), ...]},
+    {accession: protein_sequence}) for every input sequence found in the
+    FASTA(s). Protein sequences are kept only for matched accessions, for the
+    peptide-in-protein view. One linear scan per protein with a prefix index
+    over the peptides, so runtime is proteome-bound, not peptides x proteins."""
     by_prefix = defaultdict(list)
     short_peptides = []
     for sequence in peptide_sequences:
@@ -73,22 +74,28 @@ def match_peptides(peptide_sequences, fasta_paths, on_progress=None):
             short_peptides.append(sequence)
 
     matches = defaultdict(list)
+    matched_protein_sequences = {}
     proteins_scanned = 0
     for path in fasta_paths:
         for accession, gene, protein_name, species, protein_seq in parse_fasta(path):
             entry = (accession, gene, protein_name, species)
+            hit = False
             for i in range(len(protein_seq) - PREFIX_LENGTH + 1):
                 for peptide in by_prefix.get(protein_seq[i:i + PREFIX_LENGTH], ()):
                     if (protein_seq.startswith(peptide, i)
                             and entry not in matches[peptide]):
                         matches[peptide].append(entry)
+                        hit = True
             for peptide in short_peptides:
                 if peptide in protein_seq and entry not in matches[peptide]:
                     matches[peptide].append(entry)
+                    hit = True
+            if hit:
+                matched_protein_sequences[accession] = protein_seq
             proteins_scanned += 1
             if on_progress and proteins_scanned % 5000 == 0:
                 on_progress(proteins_scanned)
-    return matches
+    return matches, matched_protein_sequences
 
 
 def assignment_from_matches(entries):
@@ -101,9 +108,12 @@ def assignment_from_matches(entries):
     unambiguous_gene = len(genes) == 1 and len({g for _, g, _, _ in entries}) >= 1
     first = entries[0]
     # A conserved peptide can occur in several species (Peter: "some species
-    # can be both"); all of them are reported, joined with ' + '.
+    # can be both"); all of them are reported, joined with ' + '. The accession
+    # is filled whenever the GENE is unambiguous (the first = canonical entry
+    # represents the isoform/ortholog group); only multi-gene peptides stay
+    # accession-less.
     return {
-        'uniprot_id': first[0] if len(entries) == 1 else '',
+        'uniprot_id': first[0] if unambiguous_gene else '',
         'gene_name': first[1] if unambiguous_gene else '',
         'protein_name': first[2] if unambiguous_gene else '',
         'species': ' + '.join(sorted(species_set)),

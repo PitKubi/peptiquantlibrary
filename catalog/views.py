@@ -6,7 +6,8 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import PublicPeptide, QuoteRequest, QuoteRequestItem
+from .models import (FastaAnnotation, PublicPeptide, QuoteRequest,
+                     QuoteRequestItem)
 
 PAGE_SIZE = 50
 SELECTION_SESSION_KEY = 'selection'
@@ -19,12 +20,17 @@ def _selection(request):
 
 def _hero_stats():
     public = PublicPeptide.objects
+    species_values = (public.exclude(species='')
+                      .values_list('species', flat=True).distinct())
+    # Count single species: a conserved 'Human + Mouse' row is not a species
+    # of its own.
+    species_count = len({part for value in species_values
+                         for part in value.split(' + ')})
     return {
         'total': public.count(),
         'proteins': (public.exclude(uniprot_id='')
                      .values('uniprot_id').distinct().count()),
-        'species_count': (public.exclude(species='')
-                          .values('species').distinct().count()),
+        'species_count': species_count,
     }
 
 
@@ -95,8 +101,40 @@ def peptide_detail(request, peptide_id):
     peptide = get_object_or_404(PublicPeptide, id=peptide_id)
     return render(request, 'catalog/detail.html', {
         'peptide': peptide,
+        'protein_view': _protein_with_peptide_highlighted(peptide),
         'selection_count': len(_selection(request)),
     })
+
+
+def _protein_with_peptide_highlighted(peptide):
+    """Segments of the assigned protein's sequence with the peptide's
+    occurrences marked, for the detail page."""
+    annotation = FastaAnnotation.objects.filter(
+        peptide_sequence=peptide.peptide_sequence).first()
+    if annotation is None or not annotation.protein_sequence:
+        return None
+    protein = annotation.protein_sequence
+    target = peptide.peptide_sequence
+    segments = []
+    positions = []
+    cursor = 0
+    while True:
+        found = protein.find(target, cursor)
+        if found < 0:
+            break
+        if found > cursor:
+            segments.append({'text': protein[cursor:found], 'match': False})
+        segments.append({'text': target, 'match': True})
+        positions.append(found + 1)
+        cursor = found + len(target)
+    if cursor < len(protein):
+        segments.append({'text': protein[cursor:], 'match': False})
+    return {
+        'accession': annotation.uniprot_id,
+        'length': len(protein),
+        'positions': positions,
+        'segments': segments,
+    }
 
 
 def selection(request):
