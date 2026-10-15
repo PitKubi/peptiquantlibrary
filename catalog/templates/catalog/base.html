@@ -21,7 +21,7 @@
 body { margin: 0; color: var(--ink); background: #fff;
        font: 15px/1.5 Inter, system-ui, sans-serif; }
 header { background: #fff; border-bottom: 1px solid var(--line); }
-header .inner { max-width: 1150px; margin: 0 auto; padding: 10px 16px;
+header .inner { max-width: 1480px; margin: 0 auto; padding: 10px 16px;
                 display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
 header img.logo { height: 38px; display: block; }
 header nav { display: flex; gap: 20px; align-items: center; flex: 1; }
@@ -30,12 +30,13 @@ header nav a.ext::after { content: " \2197"; }
 a.cart { margin-left: auto; background: var(--navy-2); color: #fff; text-decoration: none;
          padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 14px; }
 .hero { background: linear-gradient(120deg, var(--navy), var(--navy-2)); color: #fff; }
-.hero .inner { max-width: 1150px; margin: 0 auto; padding: 26px 16px; }
+.hero .inner { max-width: 1480px; margin: 0 auto; padding: 26px 16px; }
 .hero h1 { margin: 0 0 4px; font-size: 26px; }
 .hero .stats { display: flex; gap: 34px; margin-top: 14px; flex-wrap: wrap; }
 .hero .stats b { display: block; font-size: 24px; }
 .hero .stats span { font-size: 13px; color: #fff; }
-main { max-width: 1150px; margin: 0 auto; padding: 20px 16px 64px; }
+main { max-width: 1480px; margin: 0 auto; padding: 20px 16px 64px; }
+.table-scroll { overflow-x: auto; }
 h2 { font-size: 19px; }
 a { color: var(--navy-2); }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
@@ -43,6 +44,10 @@ th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--lin
 th { background: var(--bg-soft); font-weight: 600; white-space: nowrap; }
 tr:hover td { background: var(--bg-soft); }
 .seq { font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+td .seq, a.seq { white-space: nowrap; word-break: normal; }
+button.row-toggle { background: none; border: 0; color: var(--navy-2); cursor: pointer;
+  font-size: 13px; padding: 2px 6px; }
+tr.expand-row td { background: var(--bg-soft); font-size: 13px; padding: 8px 14px; }
 .pill { display: inline-block; padding: 1px 10px; border-radius: 10px;
         font-size: 12px; font-weight: 600; white-space: nowrap; }
 .pill.avail { background: #e7f3ec; color: #155724; border: 1px solid #bfdfcc; }
@@ -98,6 +103,15 @@ footer .inner { max-width: 1150px; margin: 0 auto; padding: 18px 16px; font-size
 </div></footer>
 <script>
 document.addEventListener('click', function (event) {
+  var toggle = event.target.closest('.row-toggle');
+  if (toggle) {
+    var expand = toggle.closest('tr').nextElementSibling;
+    if (expand && expand.classList.contains('expand-row')) {
+      expand.hidden = !expand.hidden;
+      toggle.textContent = expand.hidden ? '▾' : '▴';
+    }
+    return;
+  }
   var el = event.target.closest('.copy');
   if (!el) return;
   var text = el.dataset.copy || el.textContent.trim();
