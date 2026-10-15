@@ -20,6 +20,12 @@ PQL_ADMIN_TOKEN = os.environ.get('PQL_ADMIN_TOKEN', '')
 # `manage.py sync_catalog --from-db`. The public request path never touches it.
 SYSQUAN_DB_DSN = os.environ.get('SYSQUAN_DB_DSN', '')
 
+# Reference proteome FASTA paths (comma-separated). When set, sync_catalog
+# auto-annotates sequences it has never seen, so the nightly sync keeps new
+# peptides annotated without a manual step.
+PQL_FASTA_PATHS = [p for p in os.environ.get('PQL_FASTA_PATHS', '').split(',')
+                   if p.strip()]
+
 # Where quote requests are mailed. Comma-separated; empty disables mail.
 PQL_QUOTE_NOTIFY_EMAILS = [e for e in os.environ.get(
     'PQL_QUOTE_NOTIFY_EMAILS', '').split(',') if e]

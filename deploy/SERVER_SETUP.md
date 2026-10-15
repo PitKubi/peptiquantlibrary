@@ -1,5 +1,14 @@
 # PeptiQuant Library — one-time server setup
 
+**Shortcut:** as root on the server, the whole document below is automated by
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/PitKubi/peptiquantlibrary/main/deploy/server_bootstrap.sh)
+```
+
+(prompts for the sysquan DB name and optional SMTP; prints the admin token at
+the end). The manual steps remain the reference.
+
 Target: the SysQuan production host (Strato). Everything here happens once;
 afterwards all operation goes through `POST /api/admin/deploy/` and
 `POST /api/admin/sync/`, no shell needed.
@@ -47,6 +56,7 @@ PQL_ALLOWED_HOSTS=peptiquantlibrary.com,www.peptiquantlibrary.com
 PQL_CSRF_TRUSTED_ORIGINS=https://peptiquantlibrary.com,https://www.peptiquantlibrary.com
 PQL_ADMIN_TOKEN=<long random token>
 SYSQUAN_DB_DSN=postgresql://pql_reader:<password>@localhost:5432/<dbname>
+PQL_FASTA_PATHS=/home/peter/peptiquantlibrary/fasta/uniprot_human_reviewed.fasta,/home/peter/peptiquantlibrary/fasta/uniprot_mouse_reviewed.fasta
 PQL_QUOTE_NOTIFY_EMAILS=christoph.borchers@mcgill.ca,rpopp@mrmproteomics.com,mtrawkina@mrmproteomics.com
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
 EMAIL_HOST=mail.smtp2go.com

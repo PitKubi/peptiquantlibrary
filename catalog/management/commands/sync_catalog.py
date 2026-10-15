@@ -1,7 +1,11 @@
+import os
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from catalog.publish import publish_catalog
+from catalog.annotation_service import annotate_sequences
+from catalog.models import FastaAnnotation, SourcePeptideLot
+from catalog.publish import STANDARD_SEQUENCE, publish_catalog
 from catalog.sync.sources import rows_from_sysquan_db, rows_from_xlsx
 from catalog.sync.upsert import upsert_rows
 
@@ -42,8 +46,34 @@ class Command(BaseCommand):
             f'skipped={run.rows_skipped} in {run.duration_seconds}s')
         if run.error:
             raise CommandError(run.error)
-        if not options['dry_run'] and not options['no_publish']:
+        if options['dry_run']:
+            return
+        self._annotate_new_sequences()
+        if not options['no_publish']:
             publish_run, rejected = publish_catalog()
             self.stdout.write(
                 f'published {publish_run.rows_created} public peptides '
                 f'({publish_run.rows_skipped} non-standard sequences held back)')
+
+    def _annotate_new_sequences(self):
+        fasta_paths = [p for p in settings.PQL_FASTA_PATHS if os.path.exists(p)]
+        missing_fastas = [p for p in settings.PQL_FASTA_PATHS
+                          if not os.path.exists(p)]
+        if missing_fastas:
+            self.stderr.write(f'PQL_FASTA_PATHS missing on disk, skipped: '
+                              f'{missing_fastas}')
+        if not fasta_paths:
+            return
+        sequences = {
+            s.strip().upper()
+            for s in SourcePeptideLot.objects.values_list(
+                'peptide_sequence', flat=True).distinct()
+            if STANDARD_SEQUENCE.match(s.strip().upper())
+        }
+        never_annotated = sequences - set(
+            FastaAnnotation.objects.filter(peptide_sequence__in=sequences)
+            .values_list('peptide_sequence', flat=True))
+        if never_annotated:
+            summary = annotate_sequences(never_annotated, fasta_paths,
+                                         log=self.stdout.write)
+            self.stdout.write(f'auto-annotated new sequences: {summary}')

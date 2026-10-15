@@ -231,6 +231,29 @@ class AnnotationTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class SyncAutoAnnotationTests(TestCase):
+    def test_sync_annotates_sequences_it_has_never_seen(self):
+        import openpyxl
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(['Peptide Sequence', 'Label', 'NAT available'])
+        sheet.append(['LVNEVTEFAK', 'K+8', 'yes'])
+        xlsx = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        workbook.save(xlsx.name)
+        fasta = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta',
+                                            delete=False)
+        fasta.write(FASTA)
+        fasta.close()
+
+        from django.core.management import call_command
+        with override_settings(PQL_FASTA_PATHS=[fasta.name]):
+            call_command('sync_catalog', '--from-xlsx', xlsx.name)
+        public = PublicPeptide.objects.get()
+        self.assertEqual(public.gene_name, 'ALB')
+        self.assertEqual(public.uniprot_id, 'P02768')
+        self.assertEqual(public.annotation_source, 'fasta')
+
+
 class XlsxSourceTests(TestCase):
     def _xlsx(self, header, rows):
         import openpyxl
