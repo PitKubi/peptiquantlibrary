@@ -102,6 +102,18 @@ class PublishTests(TestCase):
         self.assertEqual(curated.gene_name, 'CURATED')
         self.assertEqual(curated.uniprot_id, 'P16104')
 
+    def test_non_human_mouse_species_stay_internal(self):
+        upsert_rows([
+            lot_row(),
+            lot_row(source_key='MRMP-BOV', mrmp_id='MRMP-BOV',
+                    peptide_sequence='LVNELTEFAK',
+                    species_raw='Bos taurus (Bovine)'),
+        ], 'test')
+        publish_catalog()
+        sequences = set(PublicPeptide.objects.values_list(
+            'peptide_sequence', flat=True))
+        self.assertEqual(sequences, {'LVNEVTEFAK'})
+
     def test_species_normalization(self):
         self.assertEqual(normalize_species('homo Sapiens'), 'Human')
         self.assertEqual(normalize_species('Macaca fascicularis'), 'Macaque')

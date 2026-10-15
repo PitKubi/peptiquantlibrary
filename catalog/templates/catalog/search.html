@@ -56,7 +56,7 @@
 <div class="table-scroll">
 <table>
 <tr><th></th><th>Peptide</th><th>Gene</th><th>UniProt</th>
-    <th class="opt">Species</th><th>SIS</th><th>NAT</th><th></th></tr>
+    <th class="opt">Species</th><th>SIS</th><th>NAT</th></tr>
 {% for p in page %}
 <tr>
   <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
@@ -72,19 +72,9 @@
       {% else %}<span class="pill req">on request</span>{% endif %}</td>
   <td>{% if p.nat_available %}<span class="pill avail">available</span>
       {% else %}<span class="pill req">on request</span>{% endif %}</td>
-  <td>{% if p.protein_name %}<button type="button" class="row-toggle"
-      title="Show protein">&#9662;</button>{% endif %}</td>
 </tr>
-{% if p.protein_name %}
-<tr class="expand-row" hidden>
-  <td></td>
-  <td colspan="7">Protein: <span class="copy">{{ p.protein_name }}</span>
-      {% if p.species %} &middot; {{ p.species }}{% endif %}
-      &middot; <a href="/peptide/{{ p.peptide_sequence }}/">full details</a></td>
-</tr>
-{% endif %}
 {% empty %}
-<tr><td colspan="8">No peptides match. Any peptide can be synthesized on
+<tr><td colspan="7">No peptides match. Any peptide can be synthesized on
 request &mdash; <a href="/request/">send us the targets</a>.</td></tr>
 {% endfor %}
 </table>

@@ -37,6 +37,18 @@ def normalize_species(raw):
     return value[:1].upper() + value[1:]
 
 
+# The public page lists human and mouse only (Peter, 2026-10-15); the
+# occasional other-species standard (BSA, macaque ATXN3, plant spike-ins)
+# stays internal. Rows with no species information are kept.
+PUBLIC_SPECIES = {'Human', 'Mouse'}
+
+
+def _species_is_public(species):
+    if not species:
+        return True
+    return all(part in PUBLIC_SPECIES for part in species.split(' + '))
+
+
 def _first_non_empty(values):
     for value in values:
         if value and value.strip():
@@ -87,6 +99,8 @@ def publish_catalog():
                     curated[field] = (normalize_species(value)
                                       if field == 'species' else value)
                     used_fasta = True
+        if not _species_is_public(curated['species']):
+            continue
         sis_lots = [l for l in lots if l.label_type == 'SIS']
         tags = sorted({l.label_tag for l in sis_lots
                        if l.label_tag and l.label_tag != '-'})
