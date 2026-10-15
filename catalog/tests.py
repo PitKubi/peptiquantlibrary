@@ -147,7 +147,8 @@ class AnnotationTests(TestCase):
         return f.name
 
     def test_unique_match_annotates_fully(self):
-        matches, proteins = match_peptides({'LVNEVTEFAK'}, [self._fasta_path()])
+        matches, proteins, positions = match_peptides({'LVNEVTEFAK'},
+                                                      [self._fasta_path()])
         assignment = assignment_from_matches(matches['LVNEVTEFAK'])
         self.assertEqual(assignment['uniprot_id'], 'P02768')
         self.assertEqual(assignment['gene_name'], 'ALB')
@@ -155,9 +156,10 @@ class AnnotationTests(TestCase):
         self.assertEqual(assignment['species'], 'Human')
         self.assertEqual(assignment['match_count'], 1)
         self.assertIn('LVNEVTEFAK', proteins['P02768'])
+        self.assertEqual(positions[('LVNEVTEFAK', 'P02768')], 18)
 
-    def test_shared_peptide_same_gene_gets_canonical_accession(self):
-        matches, _ = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
+    def test_shared_peptide_gets_representative_accession(self):
+        matches, _, _ = match_peptides({'SHAREDPEPK'}, [self._fasta_path()])
         entries = matches['SHAREDPEPK']
         self.assertEqual(len(entries), 3)
         same_gene = [e for e in entries if e[1] == 'SHRD']
@@ -166,13 +168,29 @@ class AnnotationTests(TestCase):
         self.assertEqual(assignment['uniprot_id'], 'Q00001')
         assignment = assignment_from_matches(entries)
         self.assertEqual(assignment['gene_name'], '')
-        self.assertEqual(assignment['uniprot_id'], '')
+        self.assertEqual(assignment['uniprot_id'], 'Q00001')
         self.assertEqual(assignment['match_count'], 3)
 
     def test_unmatched_scores_zero(self):
-        matches, _ = match_peptides({'WWWWWWWWWW'}, [self._fasta_path()])
+        matches, _, _ = match_peptides({'WWWWWWWWWW'}, [self._fasta_path()])
         assignment = assignment_from_matches(matches.get('WWWWWWWWWW', []))
         self.assertEqual(assignment['match_count'], 0)
+
+    def test_variant_peptide_maps_to_parent_protein(self):
+        upsert_rows([lot_row(peptide_sequence='LVNEVTEAAK', gene_name='',
+                             uniprot_id='', species_raw='',
+                             native_mutant='Mutant')], 'test')
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', self._fasta_path())
+        annotation = FastaAnnotation.objects.get(peptide_sequence='LVNEVTEAAK')
+        self.assertTrue(annotation.variant_match)
+        self.assertEqual(annotation.uniprot_id, 'P02768')
+        self.assertEqual(annotation.match_start, 18)
+        public = PublicPeptide.objects.get()
+        self.assertEqual(public.uniprot_id, 'P02768')
+        response = self.client.get('/peptide/LVNEVTEAAK/')
+        self.assertContains(response, 'variant peptide')
+        self.assertContains(response, '<mark')
 
     def test_command_end_to_end(self):
         upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='')],

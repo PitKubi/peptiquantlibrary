@@ -75,6 +75,7 @@ def match_peptides(peptide_sequences, fasta_paths, on_progress=None):
 
     matches = defaultdict(list)
     matched_protein_sequences = {}
+    first_positions = {}
     proteins_scanned = 0
     for path in fasta_paths:
         for accession, gene, protein_name, species, protein_seq in parse_fasta(path):
@@ -85,17 +86,41 @@ def match_peptides(peptide_sequences, fasta_paths, on_progress=None):
                     if (protein_seq.startswith(peptide, i)
                             and entry not in matches[peptide]):
                         matches[peptide].append(entry)
+                        first_positions[(peptide, accession)] = i
                         hit = True
             for peptide in short_peptides:
-                if peptide in protein_seq and entry not in matches[peptide]:
+                found = protein_seq.find(peptide)
+                if found >= 0 and entry not in matches[peptide]:
                     matches[peptide].append(entry)
+                    first_positions[(peptide, accession)] = found
                     hit = True
             if hit:
                 matched_protein_sequences[accession] = protein_seq
             proteins_scanned += 1
             if on_progress and proteins_scanned % 5000 == 0:
                 on_progress(proteins_scanned)
-    return matches, matched_protein_sequences
+    return matches, matched_protein_sequences, first_positions
+
+
+AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
+
+
+def single_substitution_variants(peptide_sequences):
+    """{variant_sequence: [original, ...]} for every single amino-acid
+    substitution of the given peptides. Used to map mutant/variant peptides
+    (absent from wild-type proteomes by construction) back to their parent
+    protein. A variant that equals another catalog peptide is kept on purpose:
+    a mutant restoring to its wild-type sibling (KRAS G12C -> G12_WT) is
+    exactly how the parent protein is found, and the result is always labeled
+    variant_match."""
+    variants = defaultdict(list)
+    for sequence in peptide_sequences:
+        for i, original_aa in enumerate(sequence):
+            for aa in AMINO_ACIDS:
+                if aa == original_aa:
+                    continue
+                variants[sequence[:i] + aa + sequence[i + 1:]].append(sequence)
+    return variants
 
 
 def assignment_from_matches(entries):
@@ -105,15 +130,16 @@ def assignment_from_matches(entries):
                 'species': '', 'match_count': 0}
     genes = {gene.upper() for _, gene, _, _ in entries if gene}
     species_set = {species for _, _, _, species in entries if species}
-    unambiguous_gene = len(genes) == 1 and len({g for _, g, _, _ in entries}) >= 1
+    unambiguous_gene = len(genes) <= 1
     first = entries[0]
     # A conserved peptide can occur in several species (Peter: "some species
     # can be both"); all of them are reported, joined with ' + '. The accession
-    # is filled whenever the GENE is unambiguous (the first = canonical entry
-    # represents the isoform/ortholog group); only multi-gene peptides stay
-    # accession-less.
+    # is ALWAYS filled (Peter: every peptide needs one) — for a multi-gene
+    # peptide it is the first match as representative, with match_count
+    # carrying the shared-ness for the detail page; gene/protein stay blank
+    # only when the matches disagree on the gene.
     return {
-        'uniprot_id': first[0] if unambiguous_gene else '',
+        'uniprot_id': first[0],
         'gene_name': first[1] if unambiguous_gene else '',
         'protein_name': first[2] if unambiguous_gene else '',
         'species': ' + '.join(sorted(species_set)),

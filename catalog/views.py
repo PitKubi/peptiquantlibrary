@@ -130,11 +130,21 @@ def _protein_with_peptide_highlighted(peptide):
         cursor = found + len(target)
     if cursor < len(protein):
         segments.append({'text': protein[cursor:], 'match': False})
+    if not positions and annotation.match_start is not None:
+        # Variant peptide: no exact occurrence; highlight the aligned region
+        # of the parent protein instead.
+        start = annotation.match_start
+        segments = [{'text': protein[:start], 'match': False},
+                    {'text': protein[start:start + len(target)], 'match': True},
+                    {'text': protein[start + len(target):], 'match': False}]
+        positions = [start + 1]
     return {
         'accession': annotation.uniprot_id,
         'length': len(protein),
         'positions': positions,
         'segments': segments,
+        'variant_match': annotation.variant_match,
+        'match_count': annotation.match_count,
     }
 
 

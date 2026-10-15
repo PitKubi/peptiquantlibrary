@@ -52,15 +52,16 @@
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
 <p class="note">{{ page.paginator.count }} peptide{{ page.paginator.count|pluralize }}
 &mdash; tick rows, <button class="small" type="submit">Add to your list</button>
-&mdash; click any value to copy it.</p>
+&mdash; click a sequence for details, &#10697; or any other value to copy.</p>
 <table>
 <tr><th></th><th>Peptide</th><th>Gene</th><th class="opt">Protein</th>
     <th>UniProt</th><th class="opt">Species</th><th>SIS</th><th>NAT</th></tr>
 {% for p in page %}
 <tr>
   <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
-  <td><span class="seq copy">{{ p.peptide_sequence }}</span>
-      <a href="/peptide/{{ p.peptide_sequence }}/" title="Details">&#8505;</a></td>
+  <td><a class="seq" href="/peptide/{{ p.peptide_sequence }}/"
+         title="Peptide details">{{ p.peptide_sequence }}</a>
+      <span class="copy" data-copy="{{ p.peptide_sequence }}" title="Copy sequence">&#10697;</span></td>
   <td><span class="copy">{{ p.gene_name }}</span></td>
   <td class="opt"><span class="copy">{{ p.protein_name }}</span></td>
   <td>{% if p.uniprot_id %}<span class="copy">{{ p.uniprot_id }}</span>

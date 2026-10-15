@@ -74,6 +74,14 @@ class FastaAnnotation(models.Model):
         blank=True,
         help_text='Sequence of the assigned protein, for the highlighted '
                   'peptide-in-protein view on the detail page')
+    match_start = models.IntegerField(
+        null=True, blank=True,
+        help_text='0-based position of the (possibly variant) match in '
+                  'protein_sequence')
+    variant_match = models.BooleanField(
+        default=False,
+        help_text='Matched via a single amino-acid substitution (mutant/'
+                  'variant peptide mapped to its parent protein)')
     match_count = models.IntegerField(default=0)
     fasta_label = models.CharField(max_length=255, blank=True)
     annotated_at = models.DateTimeField(auto_now=True)
