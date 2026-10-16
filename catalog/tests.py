@@ -420,6 +420,15 @@ class AdminApiTests(TestCase):
     def test_unconfigured_token_refuses(self):
         self.assertEqual(self.client.get('/api/admin/health/').status_code, 503)
 
+    def test_test_email_sends_via_configured_backend(self):
+        response = self.client.post(
+            '/api/admin/test-email/', '{"to": "pk@example.org"}',
+            content_type='application/json', headers={'X-Admin-Token': 'sekret'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['sent'], 1)
+        from django.core import mail
+        self.assertEqual(mail.outbox[0].to, ['pk@example.org'])
+
     def test_quote_requests_listing_and_handling(self):
         upsert_rows([lot_row()], 'test')
         publish_catalog()

@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/admin/deploy/', admin_api.deploy),
     path('api/admin/sync/', admin_api.sync),
     path('api/admin/logs/', admin_api.logs),
+    path('api/admin/test-email/', admin_api.test_email),
     path('api/admin/quote-requests/', admin_api.quote_requests),
     path('api/admin/quote-requests/mark-handled/', admin_api.mark_quote_handled),
 ]

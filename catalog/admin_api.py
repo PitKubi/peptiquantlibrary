@@ -17,7 +17,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-API_BUILD = '2026-10-15-public-catalog-2'
+API_BUILD = '2026-10-16-smtp-test'
 
 
 def _token_from(request):
@@ -109,6 +109,30 @@ def logs(request):
     with open(path, 'rb') as f:
         lines = f.readlines()[-tail:]
     return HttpResponse(b''.join(lines), content_type='text/plain')
+
+
+@admin_token_required
+def test_email(request):
+    """POST {"to": "addr"}: send one test mail so SMTP can be verified without
+    emailing the real quote-notify recipients. Errors are returned, not
+    swallowed, because this endpoint exists to diagnose the mail setup."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    from django.core.mail import send_mail
+    to = (json.loads(request.body or b'{}').get('to') or '').strip()
+    if not to:
+        return JsonResponse({'error': '"to" address required'}, status=400)
+    try:
+        sent = send_mail('PeptiQuant Library SMTP test',
+                         'Quote-request notification email is working.',
+                         settings.DEFAULT_FROM_EMAIL, [to],
+                         fail_silently=False)
+    except Exception as exc:
+        return JsonResponse({'sent': 0, 'error': f'{type(exc).__name__}: {exc}'},
+                            status=502)
+    return JsonResponse({'sent': sent, 'to': to,
+                         'backend': settings.EMAIL_BACKEND,
+                         'from': settings.DEFAULT_FROM_EMAIL})
 
 
 @admin_token_required
