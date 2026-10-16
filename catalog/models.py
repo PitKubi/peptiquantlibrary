@@ -40,6 +40,10 @@ class SourcePeptideLot(models.Model):
     aaa_ratio = models.FloatField(null=True, blank=True)
     workflow_status = models.CharField(max_length=30, blank=True)
     project_category = models.CharField(max_length=100, blank=True)
+    kit_name = models.CharField(
+        max_length=100, blank=True,
+        help_text='Commercial kit(s) this lot belongs to, e.g. BAK270; '
+                  'comes from kit catalog spreadsheets, not the workflow tool')
 
     first_seen_at = models.DateTimeField(auto_now_add=True)
     synced_at = models.DateTimeField(auto_now=True)
@@ -116,12 +120,18 @@ class PublicPeptide(models.Model):
 
     # Christoph 2026-10-16: "please state if the sequence represents wild type
     # or mutant"; Peter to Maria same day: with no curated mutation info, show
-    # NA rather than guess.
+    # NA rather than guess. 'mutant_inferred' (Peter 2026-10-16) is the one
+    # sanctioned inference: unambiguous single-substitution mapping AND the
+    # wild-type counterpart sequence is itself in the catalog.
     SEQUENCE_VARIANT_CHOICES = [('wildtype', 'Wild type'),
                                 ('mutant', 'Mutant'),
+                                ('mutant_inferred', 'Mutant (inferred)'),
                                 ('', 'NA')]
-    sequence_variant = models.CharField(max_length=10, blank=True,
+    sequence_variant = models.CharField(max_length=16, blank=True,
                                         choices=SEQUENCE_VARIANT_CHOICES)
+    kit_names = models.CharField(
+        max_length=200, blank=True,
+        help_text='Distinct kit names across this sequence\'s lots')
 
     ANNOTATION_SOURCES = [('curated', 'Curated in SysQuan'),
                           ('fasta', 'FASTA-derived'),

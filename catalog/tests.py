@@ -21,6 +21,7 @@ def lot_row(**overrides):
         'mass_confirmed': True, 'purity_confirmed': True,
         'cze_purity': 0.95, 'aaa_ratio': 1.01,
         'workflow_status': '9_inventory', 'project_category': 'In-house',
+        'kit_name': '',
     }
     row.update(overrides)
     return row
@@ -728,3 +729,78 @@ class DetailReconciliationTests(TestCase):
         publish_catalog()
         response = self.client.get('/peptide/LVNEVTEFAK/')
         self.assertContains(response, 'curated as mutant')
+
+
+class InferredMutantTests(TestCase):
+    def test_variant_with_wildtype_counterpart_in_catalog_is_inferred_mutant(self):
+        upsert_rows([
+            lot_row(peptide_sequence='LVNEVTEAAK', gene_name='', uniprot_id='',
+                    species_raw='', native_mutant=''),
+            lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                    peptide_sequence='LVNEVTEFAK', gene_name='', uniprot_id='',
+                    species_raw='', native_mutant=''),
+        ], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        variant = PublicPeptide.objects.get(peptide_sequence='LVNEVTEAAK')
+        self.assertEqual(variant.sequence_variant, 'mutant_inferred')
+        wildtype = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.assertEqual(wildtype.sequence_variant, 'wildtype')
+        response = self.client.get('/peptide/LVNEVTEAAK/')
+        self.assertContains(response, 'Mutant (inferred)')
+        self.assertContains(response, 'not yet curated')
+
+    def test_curation_still_outranks_the_inference(self):
+        upsert_rows([
+            lot_row(peptide_sequence='LVNEVTEAAK', native_mutant='Native',
+                    gene_name='', uniprot_id='', species_raw=''),
+            lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                    peptide_sequence='LVNEVTEFAK', gene_name='', uniprot_id='',
+                    species_raw='', native_mutant=''),
+        ], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        variant = PublicPeptide.objects.get(peptide_sequence='LVNEVTEAAK')
+        self.assertEqual(variant.sequence_variant, 'wildtype')
+
+
+class KitNameTests(TestCase):
+    def test_kit_names_from_cell(self):
+        from .sync.sources import kit_names_from_cell
+        self.assertEqual(kit_names_from_cell('BAK270 kit'), 'BAK270')
+        self.assertEqual(kit_names_from_cell('Master inventory + BAK270 kit'),
+                         'BAK270')
+        self.assertEqual(kit_names_from_cell('Master inventory'), '')
+        self.assertEqual(kit_names_from_cell(''), '')
+
+    def test_xlsx_source_column_fills_kit_and_table_shows_it(self):
+        import openpyxl
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(['Peptide Sequence', 'Label', 'NAT available', 'Source'])
+        sheet.append(['LVNEVTEFAK', 'K+8', 'yes', 'Master inventory + BAK270 kit'])
+        xlsx = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        workbook.save(xlsx.name)
+        from django.core.management import call_command
+        call_command('sync_catalog', '--from-xlsx', xlsx.name)
+        public = PublicPeptide.objects.get()
+        self.assertEqual(public.kit_names, 'BAK270')
+        response = self.client.get('/')
+        self.assertContains(response, '<th class="opt">Kit</th>')
+        self.assertContains(response, 'BAK270')
+        detail = self.client.get('/peptide/LVNEVTEFAK/')
+        self.assertContains(detail, 'BAK270')
+
+    @override_settings(PQL_ADMIN_TOKEN='secret')
+    def test_sync_xlsx_endpoint_requires_file(self):
+        refused = self.client.post('/api/admin/sync-xlsx/')
+        self.assertEqual(refused.status_code, 403)
+        response = self.client.post('/api/admin/sync-xlsx/',
+                                    HTTP_X_ADMIN_TOKEN='secret')
+        self.assertEqual(response.status_code, 400)

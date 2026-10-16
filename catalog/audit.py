@@ -18,7 +18,8 @@ EXAMPLE_LIMIT = 20
 
 PUBLIC_FIELDS = ('gene_name', 'uniprot_id', 'protein_name', 'species',
                  'sis_available', 'nat_available', 'sis_label_tags',
-                 'sequence_variant', 'annotation_source', 'lot_count')
+                 'sequence_variant', 'kit_names', 'annotation_source',
+                 'lot_count')
 
 
 def audit_catalog():

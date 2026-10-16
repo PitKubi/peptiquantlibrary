@@ -29,6 +29,19 @@ def normalize_label_type(label_type):
     return value if value in ('NAT', 'SIS') else 'NAT'
 
 
+def kit_names_from_cell(value):
+    """Kit membership from a catalog cell such as 'BAK270 kit' or
+    'Master inventory + BAK270 kit': every '+'-separated token that names a
+    kit, with the ' kit' suffix dropped. Tokens without the suffix (e.g.
+    'Master inventory') are not kits."""
+    names = []
+    for token in (value or '').split('+'):
+        token = token.strip()
+        if token.lower().endswith(' kit'):
+            names.append(token[:-4].strip())
+    return ', '.join(names)
+
+
 WORKFLOW_SQL = """
     SELECT mrmp_id, peptide_sequence, label_type, label, native_mutant,
            species, phospho_present, uniprot_id, gene_name,
@@ -80,6 +93,9 @@ def rows_from_sysquan_db(dsn):
                     'aaa_ratio': r['aaa_ratio'],
                     'workflow_status': r['workflow_status'] or '',
                     'project_category': (r['project_category'] or '').strip(),
+                    # The workflow tool has no kit concept; kit membership
+                    # comes from the kit catalog spreadsheets.
+                    'kit_name': '',
                 }
             cursor.execute(INVENTORY_SQL)
             for r in cursor.fetchall():
@@ -106,6 +122,7 @@ def rows_from_sysquan_db(dsn):
                     'workflow_status': '9_inventory',
                     # The legacy inventory table has no project column.
                     'project_category': '',
+                    'kit_name': '',
                 }
 
 
@@ -125,6 +142,7 @@ XLSX_COLUMN_ALIASES = {
     'species': ('species', 'organism'),
     'mrmp_id': ('mrmp id', 'mrmp_id', 'peptide id'),
     'nat_available': ('nat available', 'nat'),
+    'kit_name': ('kit', 'kit name', 'kit membership', 'source'),
 }
 
 
@@ -179,6 +197,7 @@ def rows_from_xlsx(path, default_label_type='SIS'):
             'aaa_ratio': None,
             'workflow_status': '',
             'project_category': '',
+            'kit_name': kit_names_from_cell(cell(row, 'kit_name')),
         }
         yield {**base, 'source_key': f'{sequence}|{label_type}|{label_tag}',
                'label_type': label_type, 'label_tag': label_tag}

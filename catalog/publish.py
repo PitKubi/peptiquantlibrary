@@ -74,23 +74,32 @@ def normalize_native_mutant(raw):
 MIN_WILDTYPE_INFERENCE_LENGTH = 7
 
 
-def derive_sequence_variant(lots, annotation):
+def derive_sequence_variant(lots, annotation, catalog_sequences):
     """Curated WT/mutant wins; lots that disagree stay NA rather than guessed.
-    Without curation the only defensible inference is wild type from an exact
-    proteome match of a tryptic-length peptide. A single-substitution match is
-    NOT evidence of mutation (a wild-type peptide of a species outside the
-    loaded FASTAs, an isoform junction or a TrEMBL-only protein are equally
-    likely; 31 such rows were published as "Mutant" before 2026-10-16), so it
-    stays NA."""
+    Without curation the only defensible inferences are: wild type from an
+    exact proteome match of a tryptic-length peptide, and 'Mutant (inferred)'
+    when an unambiguous single-substitution mapping exists AND the wild-type
+    counterpart sequence is itself in the catalog (Peter 2026-10-16, the
+    GOLGA4 EQH/EQQ pair). A lone single-substitution match is NOT evidence of
+    mutation (a wild-type peptide of a species outside the loaded FASTAs, an
+    isoform junction or a TrEMBL-only protein are equally likely; 31 such rows
+    were published as "Mutant" before 2026-10-16), so it stays NA."""
     curated = {normalize_native_mutant(l.native_mutant) for l in lots} - {''}
     if len(curated) == 1:
         return curated.pop()
     if len(curated) > 1:
         return ''
-    if (annotation is not None and annotation.match_count
-            and not annotation.variant_match
+    if annotation is None or not annotation.match_count:
+        return ''
+    if (not annotation.variant_match
             and len(annotation.peptide_sequence) >= MIN_WILDTYPE_INFERENCE_LENGTH):
         return 'wildtype'
+    if annotation.variant_match and annotation.match_start is not None:
+        wildtype_counterpart = annotation.protein_sequence[
+            annotation.match_start:
+            annotation.match_start + len(annotation.peptide_sequence)]
+        if wildtype_counterpart in catalog_sequences:
+            return 'mutant_inferred'
     return ''
 
 
@@ -147,11 +156,15 @@ def build_public_rows():
         sis_lots = [l for l in lots if l.label_type == 'SIS']
         tags = sorted({l.label_tag for l in sis_lots
                        if l.label_tag and l.label_tag != '-'})
+        kit_names = sorted({name.strip() for l in lots
+                            for name in l.kit_name.split(',') if name.strip()})
         rows[sequence] = dict(
             sis_available=bool(sis_lots),
             nat_available=any(l.label_type == 'NAT' for l in lots),
             sis_label_tags=', '.join(tags),
-            sequence_variant=derive_sequence_variant(lots, fasta),
+            kit_names=', '.join(kit_names),
+            sequence_variant=derive_sequence_variant(
+                lots, fasta, lots_by_sequence.keys()),
             annotation_source=('curated+fasta' if used_curated and used_fasta
                                else 'curated' if used_curated
                                else 'fasta' if used_fasta else ''),

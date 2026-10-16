@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/admin/health/', admin_api.health),
     path('api/admin/deploy/', admin_api.deploy),
     path('api/admin/sync/', admin_api.sync),
+    path('api/admin/sync-xlsx/', admin_api.sync_xlsx),
     path('api/admin/audit/', admin_api.audit),
     path('api/admin/annotate/', admin_api.annotate),
     path('api/admin/logs/', admin_api.logs),

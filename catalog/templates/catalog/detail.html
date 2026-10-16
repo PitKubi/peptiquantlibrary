@@ -15,6 +15,8 @@
   {% if peptide.species %}<tr><th>Species</th><td>{{ peptide.species }}</td></tr>{% endif %}
   <tr><th>Wild type / Mutant</th>
       <td>{{ peptide.get_sequence_variant_display }}</td></tr>
+  {% if peptide.kit_names %}<tr><th>Kit</th>
+      <td>{{ peptide.kit_names }}</td></tr>{% endif %}
   <tr><th>SIS (labeled)</th><td>
     {% if peptide.sis_available %}<span class="pill avail">available</span>
       {% if peptide.sis_label_tags %} &nbsp;label: {{ peptide.sis_label_tags }}{% endif %}
@@ -38,6 +40,9 @@
   {% if peptide.sequence_variant == 'wildtype' %}It is curated as wild type:
   the exact sequence is simply absent from the reference proteomes used for
   this view (for example another species or an isoform).{% endif %}
+  {% if peptide.sequence_variant == 'mutant_inferred' %}The mutant designation
+  is inferred from this mapping and from the wild-type counterpart being in
+  the catalog; it is not yet curated.{% endif %}
   {% elif peptide.sequence_variant == 'mutant' %}This peptide is
   curated as mutant; note that its sequence also occurs exactly in the
   reference protein shown.{% endif %}

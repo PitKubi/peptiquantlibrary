@@ -17,7 +17,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-API_BUILD = '2026-10-16-wtmt-audit'
+API_BUILD = '2026-10-16-kit-inferred'
 
 
 def _token_from(request):
@@ -96,6 +96,31 @@ def sync(request):
     log_name = _launch_detached(
         [sys.executable, '-u', manage, 'sync_catalog', '--from-db'], 'sync.log')
     return JsonResponse({'launched': True,
+                         'log': f'api/admin/logs/?file={log_name}'})
+
+
+@admin_token_required
+def sync_xlsx(request):
+    """POST multipart {"file": catalog.xlsx}: store the spreadsheet and run
+    sync_catalog --from-xlsx on it, detached. This is how kit catalogs (which
+    exist outside the SysQuan workflow tool) reach production, since the box
+    has no operator shell. Progress: GET logs/?file=sync.log"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    upload = request.FILES.get('file')
+    if upload is None:
+        return JsonResponse({'error': 'multipart "file" required'}, status=400)
+    os.makedirs(settings.PQL_LOG_DIR, exist_ok=True)
+    path = os.path.join(settings.PQL_LOG_DIR,
+                        'upload_' + os.path.basename(upload.name))
+    with open(path, 'wb') as f:
+        for chunk in upload.chunks():
+            f.write(chunk)
+    manage = os.path.join(settings.BASE_DIR, 'manage.py')
+    log_name = _launch_detached(
+        [sys.executable, '-u', manage, 'sync_catalog', '--from-xlsx', path],
+        'sync.log')
+    return JsonResponse({'launched': True, 'stored': path,
                          'log': f'api/admin/logs/?file={log_name}'})
 
 

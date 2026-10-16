@@ -59,7 +59,7 @@ Click a sequence for details; click &#10697; or any other value to copy it.</p>
 <table>
 <tr><th><input type="checkbox" id="check-page" title="Select all on this page"></th>
     <th>Peptide</th><th>Gene</th><th>UniProt</th>
-    <th>Protein</th><th>WT/MT</th>
+    <th>Protein</th><th>WT/MT</th><th class="opt">Kit</th>
     <th class="opt">Species</th><th>SIS</th><th>NAT</th></tr>
 {% for p in page %}
 <tr>
@@ -75,6 +75,7 @@ Click a sequence for details; click &#10697; or any other value to copy it.</p>
   <td>{% if p.protein_name %}<span class="copy trunc"
       title="{{ p.protein_name }}">{{ p.protein_name }}</span>{% endif %}</td>
   <td>{{ p.get_sequence_variant_display }}</td>
+  <td class="opt">{{ p.kit_names }}</td>
   <td class="opt">{{ p.species }}</td>
   <td>{% if p.sis_available %}<span class="pill avail">available{% if p.sis_label_tags %} {{ p.sis_label_tags }}{% endif %}</span>
       {% else %}<span class="pill req">on request</span>{% endif %}</td>
@@ -82,7 +83,7 @@ Click a sequence for details; click &#10697; or any other value to copy it.</p>
       {% else %}<span class="pill req">on request</span>{% endif %}</td>
 </tr>
 {% empty %}
-<tr><td colspan="9">No peptides match. Any peptide can be synthesized on
+<tr><td colspan="10">No peptides match. Any peptide can be synthesized on
 request; <a href="/request/">send us the targets</a>.</td></tr>
 {% endfor %}
 </table>
