@@ -25,19 +25,25 @@ sudo -u "$APP_USER" bash -c "cd $APP_DIR && python3 -m venv .venv \
   && .venv/bin/pip install -q -r requirements.txt psycopg2-binary"
 
 echo "== 3/8 read-only database role"
-read -r -p "SysQuan database name [sysquant]: " DB_NAME
-DB_NAME=${DB_NAME:-sysquant}
-PQL_DB_PASS=$(openssl rand -hex 16)
-sudo -u postgres psql -v ON_ERROR_STOP=0 <<SQL
+if [ -f "$ENV_DIR/env" ]; then
+  # Re-run after an interrupted first run: the env file already holds the
+  # pql_reader DSN, so resetting the role password here would break it.
+  echo "  ${ENV_DIR}/env exists; keeping the pql_reader role as is"
+else
+  read -r -p "SysQuan database name [sysquant]: " DB_NAME
+  DB_NAME=${DB_NAME:-sysquant}
+  PQL_DB_PASS=$(openssl rand -hex 16)
+  sudo -u postgres psql -v ON_ERROR_STOP=0 <<SQL
 CREATE ROLE pql_reader WITH LOGIN PASSWORD '${PQL_DB_PASS}';
 ALTER ROLE pql_reader WITH LOGIN PASSWORD '${PQL_DB_PASS}';
 GRANT CONNECT ON DATABASE ${DB_NAME} TO pql_reader;
 SQL
-sudo -u postgres psql -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
+  sudo -u postgres psql -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
 GRANT USAGE ON SCHEMA public TO pql_reader;
 GRANT SELECT ON sysq_inhouse_peptideworkflowentry TO pql_reader;
 GRANT SELECT ON sysq_inhouse_syntheticpeptideinventory TO pql_reader;
 SQL
+fi
 
 echo "== 4/8 environment file"
 mkdir -p "$ENV_DIR"
