@@ -74,6 +74,7 @@ def search(request):
         peptides = peptides.filter(species__icontains=species)
 
     page = Paginator(peptides, PAGE_SIZE).get_page(request.GET.get('page'))
+    selected_ids = set(_selection(request))
     species_options = sorted({
         part for value in PublicPeptide.objects.exclude(species='')
         .values_list('species', flat=True).distinct()
@@ -81,6 +82,7 @@ def search(request):
     })
     return render(request, 'catalog/search.html', {
         'page': page,
+        'selected_ids': selected_ids,
         'query': query,
         'bulk': bulk,
         'availability': availability,

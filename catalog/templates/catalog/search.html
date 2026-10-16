@@ -51,15 +51,18 @@
 <input type="hidden" name="action" value="add">
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
 <p class="note">{{ page.paginator.count }} peptide{{ page.paginator.count|pluralize }}.
-Tick rows and <button class="small" type="submit">Add to your list</button>.
+Tick rows, or the header box for the whole page, and
+<button class="small" type="submit">Add to your list</button>.
 Click a sequence for details; click &#10697; or any other value to copy it.</p>
 <div class="table-scroll">
 <table>
-<tr><th></th><th>Peptide</th><th>Gene</th><th>UniProt</th>
+<tr><th><input type="checkbox" id="check-page" title="Select all on this page"></th>
+    <th>Peptide</th><th>Gene</th><th>UniProt</th>
     <th class="opt">Species</th><th>SIS</th><th>NAT</th></tr>
 {% for p in page %}
 <tr>
-  <td><input type="checkbox" name="peptide" value="{{ p.id }}"></td>
+  <td>{% if p.id in selected_ids %}<span class="inlist" title="Already in your list">&#10003; in list</span>
+      {% else %}<input type="checkbox" name="peptide" value="{{ p.id }}">{% endif %}</td>
   <td><a class="seq" href="/peptide/{{ p.peptide_sequence }}/"
          title="Peptide details">{{ p.peptide_sequence }}</a>
       <span class="copy" data-copy="{{ p.peptide_sequence }}" title="Copy sequence">&#10697;</span></td>
@@ -88,4 +91,13 @@ request; <a href="/request/">send us the targets</a>.</td></tr>
 
 <div class="onco-banner">For ready-made cancer-mutation assay kits, visit
 <a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>.</div>
+
+<script>
+var checkPage = document.getElementById('check-page');
+if (checkPage) checkPage.addEventListener('change', function () {
+  document.querySelectorAll('input[name=peptide]').forEach(function (box) {
+    box.checked = checkPage.checked;
+  });
+});
+</script>
 {% endblock %}

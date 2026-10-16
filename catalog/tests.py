@@ -386,6 +386,16 @@ class PublicViewTests(TestCase):
         self.assertContains(response, 'required')
         self.assertEqual(QuoteRequest.objects.count(), 0)
 
+    def test_added_rows_show_in_list_mark_and_stay_visible(self):
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],
+                                         'next': '/'})
+        response = self.client.get('/')
+        self.assertContains(response, 'LVNEVTEFAK')
+        self.assertContains(response, 'in list')
+        self.assertNotContains(response, f'name="peptide" value="{alb.id}"')
+        self.assertContains(response, 'id="check-page"')
+
     def test_selection_remove(self):
         alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
         self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],
