@@ -17,7 +17,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-API_BUILD = '2026-10-16-smtp-test'
+API_BUILD = '2026-10-16-wtmt-audit'
 
 
 def _token_from(request):
@@ -95,6 +95,29 @@ def sync(request):
     manage = os.path.join(settings.BASE_DIR, 'manage.py')
     log_name = _launch_detached(
         [sys.executable, '-u', manage, 'sync_catalog', '--from-db'], 'sync.log')
+    return JsonResponse({'launched': True,
+                         'log': f'api/admin/logs/?file={log_name}'})
+
+
+@admin_token_required
+def audit(request):
+    """GET: re-derive every published claim and return the findings, so the
+    production catalog can be verified for scientific accuracy without shell
+    access (built after Christoph caught a wrong peptide-in-protein highlight)."""
+    from catalog.audit import audit_catalog
+    return JsonResponse(audit_catalog())
+
+
+@admin_token_required
+def annotate(request):
+    """POST: full FASTA re-annotation (PQL_FASTA_PATHS) + republish, detached.
+    Needed whenever the matching rules change, because sync only annotates
+    never-seen sequences. Progress: GET logs/?file=annotate.log"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    manage = os.path.join(settings.BASE_DIR, 'manage.py')
+    log_name = _launch_detached(
+        [sys.executable, '-u', manage, 'annotate_from_fasta'], 'annotate.log')
     return JsonResponse({'launched': True,
                          'log': f'api/admin/logs/?file={log_name}'})
 

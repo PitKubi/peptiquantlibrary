@@ -4,10 +4,23 @@ Used by the annotate_from_fasta command (all sequences) and by sync_catalog
 (only sequences that have never been annotated), so a nightly sync keeps new
 peptides annotated without a separate step."""
 import os
+from collections import defaultdict
 
 from .annotation import (assignment_from_matches, match_peptides,
                          single_substitution_variants)
-from .models import FastaAnnotation
+from .models import FastaAnnotation, SourcePeptideLot
+
+
+def curated_accessions_by_sequence():
+    """{normalized sequence: curated accessions} from the lots, isoform
+    suffixes stripped, for choosing the representative FASTA match."""
+    mapping = defaultdict(set)
+    rows = (SourcePeptideLot.objects.exclude(uniprot_id='')
+            .values_list('peptide_sequence', 'uniprot_id'))
+    for sequence, uniprot_id in rows:
+        mapping[sequence.strip().upper()].add(
+            uniprot_id.strip().upper().split('-')[0])
+    return mapping
 
 
 def annotate_sequences(sequences, fasta_paths, log=lambda line: None):
@@ -16,6 +29,7 @@ def annotate_sequences(sequences, fasta_paths, log=lambda line: None):
     sequences = set(sequences)
     if not sequences:
         return 'nothing to annotate'
+    preferred = curated_accessions_by_sequence()
     log(f'Matching {len(sequences)} sequences against '
         f'{len(fasta_paths)} FASTA file(s)...')
     matches, proteins, positions = match_peptides(sequences, fasta_paths)
@@ -31,13 +45,15 @@ def annotate_sequences(sequences, fasta_paths, log=lambda line: None):
     }
     for sequence in sequences:
         if matches.get(sequence):
-            assignment = assignment_from_matches(matches[sequence])
+            assignment = assignment_from_matches(matches[sequence],
+                                                 preferred.get(sequence, ()))
             assignment['variant_match'] = False
             assignment['match_start'] = positions.get(
                 (sequence, assignment['uniprot_id']))
         else:
             assignment = assignment_from_matches(
-                variant_entries.get(sequence, []))
+                _unambiguous_variant_entries(variant_entries.get(sequence, [])),
+                preferred.get(sequence, ()))
             assignment['variant_match'] = bool(assignment['match_count'])
             assignment['match_start'] = variant_positions.get(
                 (sequence, assignment['uniprot_id']))
@@ -54,9 +70,26 @@ def annotate_sequences(sequences, fasta_paths, log=lambda line: None):
             annotation.save()
 
     exact = sum(1 for s in sequences if matches.get(s))
-    via_variant = sum(1 for s in unmatched if variant_entries.get(s))
+    via_variant = sum(
+        1 for s in unmatched
+        if _unambiguous_variant_entries(variant_entries.get(s, [])))
     return (f'{exact}/{len(sequences)} exact, {via_variant} via single '
             f'substitution, {len(sequences) - exact - via_variant} unmatched')
+
+
+def _unambiguous_variant_entries(entries):
+    """A single-substitution hit is an inference, not an observation: it is
+    accepted only when the parent is unambiguous — every hit carries the same
+    non-empty gene symbol (orthologs conflate deliberately), or every hit is
+    one single protein. Blank gene symbols must not pool into "one gene":
+    17 unrelated GN=-less Ig V-region proteins did exactly that and published
+    an arbitrary parent (LPLTFGGGTK, found 2026-10-16); such peptides land in
+    the curation report instead."""
+    genes = {gene.lower() for _, gene, _, _ in entries}
+    if '' not in genes and len(genes) == 1:
+        return entries
+    accessions = {accession for accession, _, _, _ in entries}
+    return entries if len(accessions) == 1 else []
 
 
 def _variant_pass(unmatched, fasta_paths, proteins, log):

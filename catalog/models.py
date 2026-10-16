@@ -114,6 +114,15 @@ class PublicPeptide(models.Model):
     nat_available = models.BooleanField(default=False)
     sis_label_tags = models.CharField(max_length=100, blank=True)
 
+    # Christoph 2026-10-16: "please state if the sequence represents wild type
+    # or mutant"; Peter to Maria same day: with no curated mutation info, show
+    # NA rather than guess.
+    SEQUENCE_VARIANT_CHOICES = [('wildtype', 'Wild type'),
+                                ('mutant', 'Mutant'),
+                                ('', 'NA')]
+    sequence_variant = models.CharField(max_length=10, blank=True,
+                                        choices=SEQUENCE_VARIANT_CHOICES)
+
     ANNOTATION_SOURCES = [('curated', 'Curated in SysQuan'),
                           ('fasta', 'FASTA-derived'),
                           ('curated+fasta', 'Curated, FASTA-completed'),

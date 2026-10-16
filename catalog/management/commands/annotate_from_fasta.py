@@ -18,10 +18,18 @@ class Command(BaseCommand):
             'update.')
 
     def add_arguments(self, parser):
-        parser.add_argument('fasta', nargs='+', help='UniProt-format FASTA path(s)')
+        parser.add_argument('fasta', nargs='*',
+                            help='UniProt-format FASTA path(s); '
+                                 'defaults to PQL_FASTA_PATHS')
+
         parser.add_argument('--no-publish', action='store_true')
 
     def handle(self, *args, **options):
+        if not options['fasta']:
+            from django.conf import settings
+            options['fasta'] = list(settings.PQL_FASTA_PATHS)
+        if not options['fasta']:
+            raise CommandError('No FASTA paths given and PQL_FASTA_PATHS empty')
         for path in options['fasta']:
             if not os.path.exists(path):
                 raise CommandError(f'{path} not found')

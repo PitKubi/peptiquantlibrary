@@ -13,6 +13,8 @@
           <a href="https://www.uniprot.org/uniprotkb/{{ peptide.uniprot_id }}"
              rel="noopener">view on UniProt &#8599;</a></td></tr>{% endif %}
   {% if peptide.species %}<tr><th>Species</th><td>{{ peptide.species }}</td></tr>{% endif %}
+  <tr><th>Wild type / Mutant</th>
+      <td>{{ peptide.get_sequence_variant_display }}</td></tr>
   <tr><th>SIS (labeled)</th><td>
     {% if peptide.sis_available %}<span class="pill avail">available</span>
       {% if peptide.sis_label_tags %} &nbsp;label: {{ peptide.sis_label_tags }}{% endif %}
@@ -27,15 +29,27 @@
   {% if protein_view.accession %}({{ protein_view.accession }}, {{ protein_view.length }} aa){% endif %}</h2>
 <p class="note">Position{{ protein_view.positions|pluralize }}
   {{ protein_view.positions|join:', ' }} of {{ protein_view.length }}.
-  {% if protein_view.variant_match %}This is a variant peptide: it maps to its
-  parent protein with one amino-acid substitution (the aligned region is
-  highlighted).{% endif %}
-  {% if protein_view.match_count > 1 %}This peptide occurs in
-  {{ protein_view.match_count }} proteins; a representative is shown.{% endif %}</p>
+  {% if protein_view.substitution %}This peptide does not occur exactly in the
+  wild-type protein: it differs by one substitution at protein position
+  {{ protein_view.substitution.protein_position }}
+  ({{ protein_view.substitution.protein_aa }} in the protein &rarr;
+  {{ protein_view.substitution.peptide_aa }} in the peptide). The aligned
+  region is highlighted and the substituted residue is marked in red.
+  {% if peptide.sequence_variant == 'wildtype' %}It is curated as wild type:
+  the exact sequence is simply absent from the reference proteomes used for
+  this view (for example another species or an isoform).{% endif %}
+  {% elif peptide.sequence_variant == 'mutant' %}This peptide is
+  curated as mutant; note that its sequence also occurs exactly in the
+  reference protein shown.{% endif %}
+  {% if protein_view.match_count > 1 %}This peptide
+  {% if protein_view.substitution %}maps to {{ protein_view.match_count }}
+  proteins via one substitution{% else %}occurs in
+  {{ protein_view.match_count }} proteins{% endif %}; a representative is
+  shown.{% endif %}</p>
 <div class="seq" style="max-width:860px; background: var(--bg-soft);
      border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px;
      line-height: 1.8; word-break: break-all;">
-  {% for segment in protein_view.segments %}{% if segment.match %}<mark style="background:#ffe08a;border-radius:3px;padding:1px 2px;font-weight:700">{{ segment.text }}</mark>{% else %}{{ segment.text }}{% endif %}{% endfor %}
+  {% for segment in protein_view.segments %}{% if segment.substituted %}<mark style="background:#f3b6b6;border-radius:3px;padding:1px 2px;font-weight:700" title="Protein residue replaced in this peptide">{{ segment.text }}</mark>{% elif segment.match %}<mark style="background:#ffe08a;border-radius:3px;padding:1px 2px;font-weight:700">{{ segment.text }}</mark>{% else %}{{ segment.text }}{% endif %}{% endfor %}
 </div>
 {% endif %}
 

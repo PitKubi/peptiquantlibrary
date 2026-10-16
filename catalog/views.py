@@ -64,10 +64,14 @@ def search(request):
             | Q(gene_name__icontains=query)
             | Q(uniprot_id__iexact=query)
             | Q(protein_name__icontains=query))
-    if availability == 'sis':
-        peptides = peptides.filter(sis_available=True)
-    elif availability == 'nat':
-        peptides = peptides.filter(nat_available=True)
+    # Christoph's three classes (2026-10-16): NAT/SIS paired means both forms
+    # of the SAME sequence exist, which one row per sequence guarantees.
+    if availability == 'paired':
+        peptides = peptides.filter(sis_available=True, nat_available=True)
+    elif availability == 'sis_only':
+        peptides = peptides.filter(sis_available=True, nat_available=False)
+    elif availability == 'nat_only':
+        peptides = peptides.filter(sis_available=False, nat_available=True)
     if species:
         # Component match, not equality: a conserved "Human + Mouse" peptide
         # belongs in both the Human and the Mouse filter.
@@ -146,20 +150,40 @@ def _protein_with_peptide_highlighted(peptide):
         cursor = found + len(target)
     if cursor < len(protein):
         segments.append({'text': protein[cursor:], 'match': False})
-    if not positions and annotation.match_start is not None:
-        # Variant peptide: no exact occurrence; highlight the aligned region
-        # of the parent protein instead.
+    substitution = None
+    if not positions and annotation.variant_match and annotation.match_start is not None:
+        # Variant peptide: no exact occurrence; show the aligned region of the
+        # parent protein with the one substituted residue marked explicitly,
+        # so the highlight is never mistaken for an exact occurrence
+        # (Christoph read exactly that into it, 2026-10-16).
         start = annotation.match_start
-        segments = [{'text': protein[:start], 'match': False},
-                    {'text': protein[start:start + len(target)], 'match': True},
-                    {'text': protein[start + len(target):], 'match': False}]
+        region = protein[start:start + len(target)]
+        diffs = [i for i, (protein_aa, peptide_aa)
+                 in enumerate(zip(region, target)) if protein_aa != peptide_aa]
+        if len(region) != len(target) or len(diffs) != 1:
+            # Stored alignment does not fit a single substitution: showing it
+            # would assert a wrong mapping, so show nothing (audit flags it).
+            return None
+        diff = diffs[0]
+        segments = [
+            {'text': protein[:start], 'match': False},
+            {'text': region[:diff], 'match': True},
+            {'text': region[diff], 'match': True, 'substituted': True},
+            {'text': region[diff + 1:], 'match': True},
+            {'text': protein[start + len(target):], 'match': False},
+        ]
         positions = [start + 1]
+        substitution = {'protein_position': start + diff + 1,
+                        'protein_aa': region[diff], 'peptide_aa': target[diff]}
+    if not positions:
+        return None
     return {
         'accession': annotation.uniprot_id,
         'length': len(protein),
         'positions': positions,
         'segments': segments,
         'variant_match': annotation.variant_match,
+        'substitution': substitution,
         'match_count': annotation.match_count,
     }
 

@@ -66,6 +66,8 @@ details.bulk { margin: 0 0 16px; }
 details.bulk summary { cursor: pointer; font-weight: 600; color: var(--navy-2); }
 .onco-banner { border: 1px solid var(--line); border-left: 4px solid var(--navy-2);
   background: var(--bg-soft); border-radius: 6px; padding: 12px 16px; margin: 22px 0; font-size: 14px; }
+.trunc { display: inline-block; max-width: 240px; overflow: hidden;
+         text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 /* Click-to-copy cells (Peter: gene/protein/peptide must be copyable). */
 .copy { cursor: copy; position: relative; }
 .copy:hover { text-decoration: underline dotted; }

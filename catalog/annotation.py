@@ -2,13 +2,11 @@
 search against reference FASTA(s) (UniProt format). Fills what Maria's curation
 hasn't yet: accession, gene, protein name, species.
 
-Assignment rules (proteomics convention, agreed with Peter 2026-10-15):
-  * exactly one matching protein  -> full annotation (proteotypic);
-  * several matches, one gene     -> gene/protein/species kept, accession only
-                                     when single (isoforms must not block the
-                                     gene column);
-  * several genes                 -> ambiguous, nothing published; surfaces in
-                                     the curation report instead.
+Assignment rules (agreed with Peter 2026-10-15, tightened 2026-10-16):
+  * exact matches: annotation from the first match as the representative,
+    match_count carries the shared-ness (disclosed on the detail page);
+  * single-substitution (variant) matches: accepted only when every hit is
+    one gene, otherwise unmatched -> curation report (annotation_service).
 """
 import re
 from collections import defaultdict
@@ -123,23 +121,26 @@ def single_substitution_variants(peptide_sequences):
     return variants
 
 
-def assignment_from_matches(entries):
+def assignment_from_matches(entries, preferred_accessions=()):
     """Reduce a sequence's match list to the publishable annotation dict."""
     if not entries:
         return {'uniprot_id': '', 'gene_name': '', 'protein_name': '',
                 'species': '', 'match_count': 0}
     species_set = {species for _, _, _, species in entries if species}
-    first = entries[0]
     # A conserved peptide can occur in several species (Peter: "some species
     # can be both"); all of them are reported, joined with ' + '. Accession,
-    # gene and protein are ALWAYS filled from the first match as the
-    # representative (Peter: every peptide needs its annotation visible);
-    # match_count carries the shared-ness, which the detail page discloses as
-    # "occurs in N proteins".
+    # gene and protein are filled from one representative match (Peter: every
+    # peptide needs its annotation visible); the curated accession is the
+    # representative whenever it is among the matches, so the detail page's
+    # mapped protein equals the curated identity (180 pages disagreed with
+    # themselves before 2026-10-16). match_count carries the shared-ness,
+    # which the detail page discloses.
+    representative = next(
+        (e for e in entries if e[0] in preferred_accessions), entries[0])
     return {
-        'uniprot_id': first[0],
-        'gene_name': first[1],
-        'protein_name': first[2],
+        'uniprot_id': representative[0],
+        'gene_name': representative[1],
+        'protein_name': representative[2],
         'species': ' + '.join(sorted(species_set)),
         'match_count': len(entries),
     }

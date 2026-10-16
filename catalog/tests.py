@@ -176,6 +176,10 @@ AAASHAREDPEPK
 GGGSHAREDPEPK
 >sp|Q00003|FAKE3_HUMAN Ambiguous protein OS=Homo sapiens (Human) OX=9606 GN=AMBI PE=1 SV=1
 CCCSHAREDPEPK
+>sp|I00001|KV101_HUMAN Ig kappa variable 1 OS=Homo sapiens (Human) OX=9606 PE=1 SV=1
+DDDFGQGTKVEIK
+>sp|I00002|KV102_HUMAN Ig kappa variable 2 OS=Homo sapiens (Human) OX=9606 PE=1 SV=1
+EEEFGQGTKVEIK
 """
 
 
@@ -225,8 +229,12 @@ class AnnotationTests(TestCase):
         public = PublicPeptide.objects.get()
         self.assertEqual(public.uniprot_id, 'P02768')
         response = self.client.get('/peptide/LVNEVTEAAK/')
-        self.assertContains(response, 'variant peptide')
-        self.assertContains(response, '<mark')
+        self.assertContains(response, 'does not occur exactly')
+        self.assertContains(response, 'F in the protein')
+        self.assertContains(response, 'A in the peptide')
+        self.assertContains(response, 'background:#f3b6b6')
+        public.refresh_from_db()
+        self.assertEqual(public.sequence_variant, 'mutant')
 
     def test_command_end_to_end(self):
         upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='')],
@@ -346,7 +354,7 @@ class PublicViewTests(TestCase):
         self.assertContains(response, 'LVNEVTEFAK')
         self.assertNotContains(response, 'AGLQFPVGR')
 
-        response = self.client.get('/', {'availability': 'nat'})
+        response = self.client.get('/', {'availability': 'paired'})
         self.assertContains(response, 'LVNEVTEFAK')
         self.assertNotContains(response, 'AGLQFPVGR')
 
@@ -480,3 +488,243 @@ class ExportImportTests(TestCase):
         self.assertEqual(FastaAnnotation.objects.count(), 1)
         public = PublicPeptide.objects.get()
         self.assertTrue(public.sis_available and public.nat_available)
+
+
+class SequenceVariantTests(TestCase):
+    def _publish_one(self, **lot_overrides):
+        upsert_rows([lot_row(**lot_overrides)], 'test')
+        publish_catalog()
+        return PublicPeptide.objects.get()
+
+    def test_curated_native_and_mutant_win(self):
+        self.assertEqual(self._publish_one(native_mutant='Native').sequence_variant,
+                         'wildtype')
+        PublicPeptide.objects.all().delete()
+        SourcePeptideLot.objects.all().delete()
+        self.assertEqual(self._publish_one(native_mutant='MT').sequence_variant,
+                         'mutant')
+
+    def test_conflicting_curation_stays_na(self):
+        upsert_rows([lot_row(native_mutant='Native'),
+                     lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                             label_type='NAT', native_mutant='Mutant')], 'test')
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.get().sequence_variant, '')
+
+    def test_placeholder_curation_falls_back_to_fasta(self):
+        upsert_rows([lot_row(native_mutant='#N/A')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            match_count=1, variant_match=False)
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.get().sequence_variant,
+                         'wildtype')
+
+    def test_variant_match_alone_is_not_evidence_of_mutation(self):
+        # No exact hit in the loaded proteomes can mean another species,
+        # an isoform or a TrEMBL-only protein just as well as a mutant.
+        upsert_rows([lot_row(native_mutant='-')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            match_count=1, variant_match=True, match_start=18)
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.get().sequence_variant, '')
+
+    def test_short_peptide_exact_hit_does_not_imply_wildtype(self):
+        upsert_rows([lot_row(peptide_sequence='LVNEV', native_mutant='')],
+                    'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEV', uniprot_id='P02768',
+            match_count=1, variant_match=False)
+        publish_catalog()
+        self.assertEqual(PublicPeptide.objects.get().sequence_variant, '')
+
+    def test_table_shows_wt_mt_and_protein_name(self):
+        self._publish_one(native_mutant='Native',
+                          protein_name='Serum albumin')
+        response = self.client.get('/')
+        self.assertContains(response, 'Wild type')
+        self.assertContains(response, 'Serum albumin')
+        self.assertContains(response, '<th>WT/MT</th>')
+
+
+class FormsFilterTests(TestCase):
+    def setUp(self):
+        upsert_rows([
+            lot_row(),
+            lot_row(source_key='MRMP-2', mrmp_id='MRMP-2',
+                    label_type='NAT', label_tag='-'),
+            lot_row(source_key='MRMP-3', mrmp_id='MRMP-3',
+                    peptide_sequence='AGLQFPVGR', gene_name='H2AX',
+                    uniprot_id='P16104'),
+            lot_row(source_key='MRMP-4', mrmp_id='MRMP-4',
+                    peptide_sequence='TCVADESAENCDK', gene_name='ALB',
+                    label_type='NAT', label_tag='-'),
+        ], 'test')
+        publish_catalog()
+
+    def test_three_classes(self):
+        paired = self.client.get('/', {'availability': 'paired'})
+        self.assertContains(paired, 'LVNEVTEFAK')
+        self.assertNotContains(paired, 'AGLQFPVGR')
+        sis_only = self.client.get('/', {'availability': 'sis_only'})
+        self.assertContains(sis_only, 'AGLQFPVGR')
+        self.assertNotContains(sis_only, 'LVNEVTEFAK')
+        nat_only = self.client.get('/', {'availability': 'nat_only'})
+        self.assertContains(nat_only, 'TCVADESAENCDK')
+        self.assertNotContains(nat_only, 'AGLQFPVGR')
+
+
+class VariantGatingTests(TestCase):
+    def test_multi_gene_variant_stays_unmatched(self):
+        # SHAREDPEPR is one substitution from SHAREDPEPK, which occurs in
+        # proteins of two genes (SHRD, AMBI): no defensible parent protein.
+        upsert_rows([lot_row(peptide_sequence='SHAREDPEPR', gene_name='',
+                             uniprot_id='', species_raw='',
+                             native_mutant='')], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        annotation = FastaAnnotation.objects.get(peptide_sequence='SHAREDPEPR')
+        self.assertEqual(annotation.match_count, 0)
+        self.assertFalse(annotation.variant_match)
+        self.assertEqual(PublicPeptide.objects.get().sequence_variant, '')
+
+    def test_blank_gene_hits_do_not_pool_into_one_parent(self):
+        # FGQGTKVEIR is one substitution from FGQGTKVEIK, present in two
+        # unrelated GN=-less Ig entries: no single gene, no single accession.
+        upsert_rows([lot_row(peptide_sequence='FGQGTKVEIR', gene_name='',
+                             uniprot_id='', species_raw='',
+                             native_mutant='')], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        annotation = FastaAnnotation.objects.get(peptide_sequence='FGQGTKVEIR')
+        self.assertEqual(annotation.match_count, 0)
+
+    def test_single_accession_without_gene_is_an_acceptable_parent(self):
+        upsert_rows([lot_row(peptide_sequence='DDDFGQGTR', gene_name='',
+                             uniprot_id='', species_raw='',
+                             native_mutant='')], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        annotation = FastaAnnotation.objects.get(peptide_sequence='DDDFGQGTR')
+        self.assertTrue(annotation.variant_match)
+        self.assertEqual(annotation.uniprot_id, 'I00001')
+
+    def test_curated_accession_chosen_as_representative(self):
+        # SHAREDPEPK occurs in Q00001/Q00002/Q00003; curation says Q00003,
+        # so the mapped protein on the detail page must be Q00003 too.
+        upsert_rows([lot_row(peptide_sequence='SHAREDPEPK', gene_name='',
+                             uniprot_id='Q00003', species_raw='',
+                             native_mutant='')], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+        annotation = FastaAnnotation.objects.get(peptide_sequence='SHAREDPEPK')
+        self.assertEqual(annotation.uniprot_id, 'Q00003')
+        self.assertEqual(annotation.match_count, 3)
+        self.assertIn('SHAREDPEPK', annotation.protein_sequence)
+
+
+class AuditTests(TestCase):
+    def _annotated_catalog(self):
+        upsert_rows([lot_row(gene_name='', uniprot_id='', species_raw='',
+                             native_mutant='')], 'test')
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False)
+        f.write(FASTA)
+        f.close()
+        from django.core.management import call_command
+        call_command('annotate_from_fasta', f.name)
+
+    def test_clean_catalog_passes(self):
+        from .audit import audit_catalog
+        self._annotated_catalog()
+        report = audit_catalog()
+        self.assertTrue(report['ok'], report['errors'])
+        self.assertEqual(report['sequence_variant']['wildtype'], 1)
+
+    def test_wrong_protein_sequence_is_an_error(self):
+        from .audit import audit_catalog
+        self._annotated_catalog()
+        FastaAnnotation.objects.update(protein_sequence='WWWWWWWWWWWWWWWWWW')
+        report = audit_catalog()
+        self.assertFalse(report['ok'])
+        self.assertIn('exact_annotation_peptide_not_in_protein',
+                      report['errors'])
+
+    def test_stale_public_field_is_an_error(self):
+        from .audit import audit_catalog
+        self._annotated_catalog()
+        PublicPeptide.objects.update(gene_name='WRONG')
+        report = audit_catalog()
+        self.assertIn('published_fields_stale', report['errors'])
+
+    def test_broken_variant_region_hides_protein_view(self):
+        upsert_rows([lot_row(native_mutant='Mutant')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            protein_sequence='MKWVTFISLLFLFSSAYSAAAAAAAAAATCVADESAENCDK',
+            match_count=1, variant_match=True, match_start=18)
+        publish_catalog()
+        response = self.client.get('/peptide/LVNEVTEFAK/')
+        self.assertNotContains(response, 'Peptide in protein')
+        from .audit import audit_catalog
+        report = audit_catalog()
+        self.assertIn('variant_region_not_single_substitution',
+                      report['errors'])
+
+    def test_stale_gate_violating_variant_is_an_error(self):
+        from .audit import audit_catalog
+        upsert_rows([lot_row(native_mutant='Mutant')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P01629', gene_name='',
+            match_count=17, variant_match=True, match_start=0,
+            protein_sequence='LVNEVTEFACAAAAAAAAAA')
+        publish_catalog()
+        report = audit_catalog()
+        self.assertIn('variant_annotation_violates_acceptance_gate',
+                      report['errors'])
+
+    @override_settings(PQL_ADMIN_TOKEN='secret')
+    def test_audit_endpoint(self):
+        self._annotated_catalog()
+        refused = self.client.get('/api/admin/audit/')
+        self.assertEqual(refused.status_code, 403)
+        response = self.client.get('/api/admin/audit/',
+                                   HTTP_X_ADMIN_TOKEN='secret')
+        self.assertTrue(json.loads(response.content)['ok'])
+
+
+class DetailReconciliationTests(TestCase):
+    ALB = 'MKWVTFISLLFLFSSAYSLVNEVTEFAKTCVADESAENCDK'
+    ALB_WITH_SUBSTITUTED_REGION = 'MKWVTFISLLFLFSSAYSLVNEVTEAAKTCVADESAENCDK'
+
+    def test_curated_wildtype_with_variant_mapping_is_reconciled(self):
+        upsert_rows([lot_row(native_mutant='Native')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            protein_sequence=self.ALB_WITH_SUBSTITUTED_REGION,
+            match_count=1, variant_match=True, match_start=18)
+        publish_catalog()
+        response = self.client.get('/peptide/LVNEVTEFAK/')
+        self.assertContains(response, 'curated as wild type')
+
+    def test_curated_mutant_with_exact_occurrence_is_reconciled(self):
+        upsert_rows([lot_row(native_mutant='Mutant')], 'test')
+        FastaAnnotation.objects.create(
+            peptide_sequence='LVNEVTEFAK', uniprot_id='P02768',
+            protein_sequence=self.ALB, match_count=1,
+            variant_match=False, match_start=18)
+        publish_catalog()
+        response = self.client.get('/peptide/LVNEVTEFAK/')
+        self.assertContains(response, 'curated as mutant')

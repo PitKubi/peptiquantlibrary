@@ -56,13 +56,48 @@ def _first_non_empty(values):
     return ''
 
 
-def publish_catalog():
-    """Returns (SyncRun, rejected) where rejected lists eligible lots whose
-    sequence is not a plain peptide (kept out of the public page, surfaced in
-    the curation report)."""
-    started = time.monotonic()
-    run = SyncRun(source='publish')
+# Maria's native_mutant column and the spreadsheets' WT/MT column are free
+# text; placeholder tokens mean "not recorded", never wild type.
+NATIVE_MUTANT_NORMALIZATION = {
+    'native': 'wildtype', 'wt': 'wildtype', 'wild type': 'wildtype',
+    'wild-type': 'wildtype', 'wildtype': 'wildtype',
+    'mutant': 'mutant', 'mt': 'mutant', 'mut': 'mutant', 'mutation': 'mutant',
+}
 
+
+def normalize_native_mutant(raw):
+    return NATIVE_MUTANT_NORMALIZATION.get((raw or '').strip().lower(), '')
+
+
+# Below this length an exact proteome hit is too likely by chance (a 5-mer is
+# expected several times in a proteome) to justify a wild-type call.
+MIN_WILDTYPE_INFERENCE_LENGTH = 7
+
+
+def derive_sequence_variant(lots, annotation):
+    """Curated WT/mutant wins; lots that disagree stay NA rather than guessed.
+    Without curation the only defensible inference is wild type from an exact
+    proteome match of a tryptic-length peptide. A single-substitution match is
+    NOT evidence of mutation (a wild-type peptide of a species outside the
+    loaded FASTAs, an isoform junction or a TrEMBL-only protein are equally
+    likely; 31 such rows were published as "Mutant" before 2026-10-16), so it
+    stays NA."""
+    curated = {normalize_native_mutant(l.native_mutant) for l in lots} - {''}
+    if len(curated) == 1:
+        return curated.pop()
+    if len(curated) > 1:
+        return ''
+    if (annotation is not None and annotation.match_count
+            and not annotation.variant_match
+            and len(annotation.peptide_sequence) >= MIN_WILDTYPE_INFERENCE_LENGTH):
+        return 'wildtype'
+    return ''
+
+
+def eligible_lots_by_sequence():
+    """(lots grouped by normalized sequence, rejected) over the eligible lots;
+    rejected lists the ones whose sequence is not a plain peptide. Shared by
+    publish and the accuracy audit so both see the same catalog."""
     lots_by_sequence = defaultdict(list)
     rejected = []
     for lot in SourcePeptideLot.objects.all():
@@ -73,6 +108,14 @@ def publish_catalog():
             lots_by_sequence[sequence].append(lot)
         else:
             rejected.append(lot)
+    return lots_by_sequence, rejected
+
+
+def build_public_rows():
+    """({sequence: field dict} of what the public table should contain,
+    rejected lots, eligible lot count). Pure derivation: publish_catalog
+    persists it, the accuracy audit diffs it against the live table."""
+    lots_by_sequence, rejected = eligible_lots_by_sequence()
 
     annotations = {
         a.peptide_sequence: a
@@ -108,12 +151,24 @@ def publish_catalog():
             sis_available=bool(sis_lots),
             nat_available=any(l.label_type == 'NAT' for l in lots),
             sis_label_tags=', '.join(tags),
+            sequence_variant=derive_sequence_variant(lots, fasta),
             annotation_source=('curated+fasta' if used_curated and used_fasta
                                else 'curated' if used_curated
                                else 'fasta' if used_fasta else ''),
             lot_count=len(lots),
             **curated,
         )
+    lots_seen = sum(len(lots) for lots in lots_by_sequence.values())
+    return rows, rejected, lots_seen
+
+
+def publish_catalog():
+    """Returns (SyncRun, rejected) where rejected lists eligible lots whose
+    sequence is not a plain peptide (kept out of the public page, surfaced in
+    the curation report)."""
+    started = time.monotonic()
+    run = SyncRun(source='publish')
+    rows, rejected, lots_seen = build_public_rows()
 
     # Upsert keyed by sequence, never delete-and-recreate: row ids (and with
     # them open pages, bookmarks and session selections) must survive a
@@ -135,7 +190,7 @@ def publish_catalog():
         if gone:
             PublicPeptide.objects.filter(peptide_sequence__in=gone).delete()
 
-    run.rows_seen = sum(len(v) for v in lots_by_sequence.values()) + len(rejected)
+    run.rows_seen = lots_seen + len(rejected)
     run.rows_created = len(rows)
     run.rows_skipped = len(rejected)
     run.ok = True
