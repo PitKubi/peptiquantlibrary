@@ -313,6 +313,16 @@ class XlsxSourceTests(TestCase):
         self.assertEqual(normalize_label_tag('', 'NAT'), '-')
         self.assertEqual(normalize_label_tag('', 'SIS'), '')
 
+    def test_placeholder_annotations_blanked(self):
+        path = self._xlsx(
+            ['Peptide Sequence', 'Gene', 'UniProt', 'Species'],
+            [['LVNEVTEFAK', '#N/A', '0', 'n/a'],
+             ['AGLQFPVGR', 'H2AX', 'P16104', 'Human']])
+        rows = list(rows_from_xlsx(path))
+        self.assertEqual((rows[0]['gene_name'], rows[0]['uniprot_id'],
+                          rows[0]['species_raw']), ('', '', ''))
+        self.assertEqual(rows[1]['gene_name'], 'H2AX')
+
 
 class PublicViewTests(TestCase):
     def setUp(self):

@@ -4,6 +4,17 @@ models for the foreign schema) is what keeps this project fully standalone
 from the sysquant codebase: moving servers means changing one DSN."""
 
 
+# Spreadsheet-era tokens that mean "unknown", not a real value; they must not
+# count as curated annotation or they outrank the FASTA-derived one and sort
+# to the top of the public table ('#N/A' and '0' did, 2026-10-16).
+PLACEHOLDER_VALUES = {'0', '-', '#n/a', 'n/a', 'na', 'none', 'null', '?'}
+
+
+def normalize_annotation(value):
+    text = (value or '').strip()
+    return '' if text.lower() in PLACEHOLDER_VALUES else text
+
+
 def normalize_label_tag(label_tag, label_type):
     tag = (label_tag or '').strip()
     if tag:
@@ -57,10 +68,10 @@ def rows_from_sysquan_db(dsn):
                     'label_type': normalize_label_type(r['label_type']),
                     'label_tag': normalize_label_tag(r['label'], r['label_type']),
                     'native_mutant': (r['native_mutant'] or '').strip(),
-                    'species_raw': (r['species'] or '').strip(),
+                    'species_raw': normalize_annotation(r['species']),
                     'phospho_present': bool(r['phospho_present']),
-                    'uniprot_id': (r['uniprot_id'] or '').strip(),
-                    'gene_name': (r['gene_name'] or '').strip(),
+                    'uniprot_id': normalize_annotation(r['uniprot_id']),
+                    'gene_name': normalize_annotation(r['gene_name']),
                     'protein_name': '',
                     'mass_confirmed': bool(r['mass_confirmed_post_synth']
                                            or r['mass_confirmed_post_hplc']),
@@ -82,8 +93,8 @@ def rows_from_sysquan_db(dsn):
                     'native_mutant': '',
                     'species_raw': '',
                     'phospho_present': bool(r['phospho_present']),
-                    'uniprot_id': (r['uniprot_id'] or '').strip(),
-                    'gene_name': (r['gene_name'] or '').strip(),
+                    'uniprot_id': normalize_annotation(r['uniprot_id']),
+                    'gene_name': normalize_annotation(r['gene_name']),
                     'protein_name': '',
                     'mass_confirmed': bool(r['post_synthesis_confirmed']
                                            or r['post_hplc_confirmed']),
@@ -157,11 +168,11 @@ def rows_from_xlsx(path, default_label_type='SIS'):
             'mrmp_id': cell(row, 'mrmp_id'),
             'peptide_sequence': sequence,
             'native_mutant': cell(row, 'native_mutant'),
-            'species_raw': cell(row, 'species'),
+            'species_raw': normalize_annotation(cell(row, 'species')),
             'phospho_present': False,
-            'uniprot_id': cell(row, 'uniprot_id'),
-            'gene_name': cell(row, 'gene_name'),
-            'protein_name': cell(row, 'protein_name'),
+            'uniprot_id': normalize_annotation(cell(row, 'uniprot_id')),
+            'gene_name': normalize_annotation(cell(row, 'gene_name')),
+            'protein_name': normalize_annotation(cell(row, 'protein_name')),
             'mass_confirmed': False,
             'purity_confirmed': False,
             'cze_purity': None,
