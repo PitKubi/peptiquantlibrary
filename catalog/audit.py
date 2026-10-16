@@ -48,6 +48,8 @@ def audit_catalog():
         'sequence_variant': {
             'wildtype': sum(1 for p in public if p.sequence_variant == 'wildtype'),
             'mutant': sum(1 for p in public if p.sequence_variant == 'mutant'),
+            'mutant_inferred': sum(1 for p in public
+                                   if p.sequence_variant == 'mutant_inferred'),
             'na': sum(1 for p in public if not p.sequence_variant),
         },
         'error_total': sum(e['count'] for e in findings.errors.values()),

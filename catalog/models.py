@@ -55,20 +55,24 @@ class SourcePeptideLot(models.Model):
         ]
 
     # Per Peter 2026-10-15: only peptides physically in inventory are listed;
-    # mid-production and failed lots stay internal. Spreadsheet catalogs are
-    # curated inventory lists by definition.
+    # mid-production and failed lots stay internal.
     # Confidentiality rule agreed with Maria (2026-10-15 call): a lot whose
     # project category contains "client" or "private" never reaches the
     # public catalog, whatever its inventory status. Maria flags such
     # projects in the sysquan tool; Peter/Christoph decide everything else.
+    # Spreadsheet lots count only when they name a kit (2026-10-16): Maria's
+    # tool is the sole master for everything else, and a spreadsheet's
+    # "master inventory" copies carry no project category, so they silently
+    # bypassed her control and re-published a client peptide (LPLTFGGGTK).
     CONFIDENTIAL_CATEGORY_WORDS = ('client', 'private')
 
     def is_catalog_eligible(self):
         category = self.project_category.lower()
         if any(word in category for word in self.CONFIDENTIAL_CATEGORY_WORDS):
             return False
-        return (self.workflow_status == '9_inventory'
-                or self.source == 'catalog_xlsx')
+        if self.source == 'catalog_xlsx':
+            return bool(self.kit_name)
+        return self.workflow_status == '9_inventory'
 
     def __str__(self):
         return f'{self.source_key} {self.peptide_sequence} [{self.label_type}]'

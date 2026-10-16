@@ -273,8 +273,8 @@ class SyncAutoAnnotationTests(TestCase):
         import openpyxl
         workbook = openpyxl.Workbook()
         sheet = workbook.active
-        sheet.append(['Peptide Sequence', 'Label', 'NAT available'])
-        sheet.append(['LVNEVTEFAK', 'K+8', 'yes'])
+        sheet.append(['Peptide Sequence', 'Label', 'NAT available', 'Kit'])
+        sheet.append(['LVNEVTEFAK', 'K+8', 'yes', 'Demo kit'])
         xlsx = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
         workbook.save(xlsx.name)
         fasta = tempfile.NamedTemporaryFile(mode='w', suffix='.fasta',
@@ -804,3 +804,24 @@ class KitNameTests(TestCase):
         response = self.client.post('/api/admin/sync-xlsx/',
                                     HTTP_X_ADMIN_TOKEN='secret')
         self.assertEqual(response.status_code, 400)
+
+
+class XlsxEligibilityTests(TestCase):
+    def test_non_kit_spreadsheet_rows_never_publish(self):
+        # A spreadsheet's "master inventory" copy carries no project
+        # category, so it must not bypass Maria's tool (a client peptide
+        # reached the public site that way on 2026-10-16).
+        import openpyxl
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(['Peptide Sequence', 'Label', 'NAT available', 'Source'])
+        sheet.append(['LVNEVTEFAK', 'K+8', 'yes', 'Master inventory'])
+        sheet.append(['AGLQFPVGR', 'R+10', 'yes', 'BAK270 kit'])
+        xlsx = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        workbook.save(xlsx.name)
+        from django.core.management import call_command
+        call_command('sync_catalog', '--from-xlsx', xlsx.name)
+        self.assertEqual(
+            list(PublicPeptide.objects.values_list('peptide_sequence',
+                                                   flat=True)),
+            ['AGLQFPVGR'])
