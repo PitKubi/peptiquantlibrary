@@ -41,12 +41,20 @@ def search(request):
     species = request.GET.get('species') or ''
     bulk = (request.GET.get('bulk') or '').strip()
 
-    # Annotated rows first: alphabetical-by-gene alone put every blank-gene
-    # row on page 1, which read as "most peptides are unannotated".
+    # Best stock first (SIS+NAT, then SIS, then NAT-only), annotated before
+    # blank: alphabetical-by-gene alone put every blank-gene row on page 1,
+    # which read as "most peptides are unannotated".
     peptides = PublicPeptide.objects.annotate(
+        availability_rank=Case(
+            When(sis_available=True, nat_available=True, then=Value(0)),
+            When(sis_available=True, then=Value(1)),
+            default=Value(2)),
+        uniprot_missing=Case(When(uniprot_id='', then=Value(1)),
+                             default=Value(0)),
         gene_missing=Case(When(gene_name='', then=Value(1)),
                           default=Value(0))
-    ).order_by('gene_missing', 'gene_name', 'peptide_sequence')
+    ).order_by('availability_rank', 'uniprot_missing', 'gene_missing',
+               'gene_name', 'peptide_sequence')
     unmatched_tokens = []
     if bulk:
         peptides, unmatched_tokens = _bulk_filter(peptides, bulk)

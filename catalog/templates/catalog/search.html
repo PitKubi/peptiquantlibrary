@@ -3,7 +3,7 @@
 <div class="hero"><div class="inner">
   <h1>PeptiQuant Library</h1>
   <div class="note">Synthetic proteotypic peptides for targeted quantitative
-  proteomics &mdash; labeled standards (SIS) and unlabeled counterparts (NAT),
+  proteomics: labeled standards (SIS) and unlabeled counterparts (NAT),
   synthesized and quality-controlled in house.</div>
   <div class="stats">
     <div><b>{{ total }}</b><span>peptides</span></div>
@@ -50,9 +50,9 @@
 {% csrf_token %}
 <input type="hidden" name="action" value="add">
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-<p class="note">{{ page.paginator.count }} peptide{{ page.paginator.count|pluralize }}
-&mdash; tick rows, <button class="small" type="submit">Add to your list</button>
-&mdash; click a sequence for details, &#10697; or any other value to copy.</p>
+<p class="note">{{ page.paginator.count }} peptide{{ page.paginator.count|pluralize }}.
+Tick rows and <button class="small" type="submit">Add to your list</button>.
+Click a sequence for details; click &#10697; or any other value to copy it.</p>
 <div class="table-scroll">
 <table>
 <tr><th></th><th>Peptide</th><th>Gene</th><th>UniProt</th>
@@ -75,7 +75,7 @@
 </tr>
 {% empty %}
 <tr><td colspan="7">No peptides match. Any peptide can be synthesized on
-request &mdash; <a href="/request/">send us the targets</a>.</td></tr>
+request; <a href="/request/">send us the targets</a>.</td></tr>
 {% endfor %}
 </table>
 </div>
@@ -86,6 +86,6 @@ request &mdash; <a href="/request/">send us the targets</a>.</td></tr>
 </div>
 </form>
 
-<div class="onco-banner">Looking for ready-made cancer-mutation assay kits?
-Build one at <a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>.</div>
+<div class="onco-banner">For ready-made cancer-mutation assay kits, visit
+<a href="https://peptiquantonco.com" rel="noopener">PeptiQuant Onco</a>.</div>
 {% endblock %}
