@@ -396,6 +396,15 @@ class PublicViewTests(TestCase):
         self.assertNotContains(response, f'name="peptide" value="{alb.id}"')
         self.assertContains(response, 'id="check-page"')
 
+    def test_clear_list_button_empties_selection(self):
+        alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
+        self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],
+                                         'next': '/'})
+        response = self.client.get('/request/')
+        self.assertContains(response, 'id="clear-list"')
+        self.client.post('/selection/', {'action': 'clear', 'next': '/request/'})
+        self.assertEqual(self.client.session['selection'], [])
+
     def test_selection_remove(self):
         alb = PublicPeptide.objects.get(peptide_sequence='LVNEVTEFAK')
         self.client.post('/selection/', {'action': 'add', 'peptide': [alb.id],

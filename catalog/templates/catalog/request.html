@@ -29,7 +29,9 @@ you are interested in.</p>
 </table>
 
 <p class="note">Untick the forms you do not need; a ticked "on request" form is
-quoted as a new synthesis.</p>
+quoted as a new synthesis.
+<button class="small" type="submit" form="clear-list"
+        style="margin-left:14px">Clear list</button></p>
 
 <div style="max-width:560px;display:grid;gap:12px;margin-top:20px">
   <label>Name<br><input type="text" name="name" value="{{ name }}" style="width:100%"></label>
@@ -49,5 +51,10 @@ quoted as a new synthesis.</p>
   <input type="hidden" name="next" value="/request/">
 </form>
 {% endfor %}
+<form id="clear-list" method="post" action="/selection/">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="clear">
+  <input type="hidden" name="next" value="/request/">
+</form>
 {% endif %}
 {% endblock %}
